@@ -103,6 +103,9 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         # 0.4.2 release-close README fail-closed structure and behavior gates.
         "tests/test_readme_install_fail_closed.py",
         "tests/test_readme_install_behavior.py",
+        # README pre-tag comprehensive configuration example: schema-valid,
+        # all supported credential/binding/injection/stdin shapes, synthetic only.
+        "tests/test_readme_comprehensive_config.py",
         # R6 slice 4a: installed-ZIP approval-chain E2E (opt-in; outside
         # tests/test_*.py), shared ZIP install helpers, dedicated runner, and
         # the self-proving opt-in gate. Task file is the slice brief.

@@ -709,6 +709,8 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # 0.4.2 release-close README fail-closed structure and behavior gates.
         "tests/test_readme_install_fail_closed.py",
         "tests/test_readme_install_behavior.py",
+        # README pre-tag comprehensive configuration example and schema gate.
+        "tests/test_readme_comprehensive_config.py",
         # R6 slice 4a source/task deltas. dist/ members stay out of this
         # enumerator (_SKIP_DIRS includes dist); 0.4.0 ZIP identity is pinned
         # by the installed-ZIP E2E harness + artifact composition tests.

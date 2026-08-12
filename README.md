@@ -289,6 +289,238 @@ stdin
 | `token` | 支持 | 不支持 | 支持 | 支持 | 支持 |
 | `username_password` | 不支持 | 支持 | 不支持 | 不支持 | 不支持 |
 
+## 最全面的完整配置示例
+
+下面这份配置是可删减的全集示例，覆盖：
+
+- 只保护、不授权使用的 `token` 和 `username_password`；
+- HTTPS Bearer；
+- 明文 HTTP Bearer；
+- HTTPS Basic Auth；
+- HTTPS API Key Header；
+- `process_env`；
+- `stdin` 的 `raw` 和 `line` 两种格式；
+- HTTP 与程序 binding 的全部可配置资源限制字段。
+
+> 这是一份字段字典，不是建议全部启用。正式使用时应删除不需要的 credential 和 binding，只保留真实业务必需的最小集合。
+>
+> 所有 `.test` 域名和 `SYNTHETIC_*_NOT_REAL` 都是不可用示例。真实秘密只能由你在本地编辑器中替换。程序路径也必须换成当前用户拥有、本人审核、权限合规的固定可执行文件。
+>
+> JSON 不支持注释，复制时请保持下面代码块为纯 JSON。每个合成秘密都故意使用不同值，因为不同 credential 不能登记相同的 Token 或密码。
+
+```json
+{
+  "version": 2,
+  "credentials": {
+    "protected-only-token": {
+      "type": "token",
+      "value": "SYNTHETIC_PROTECTED_ONLY_TOKEN_NOT_REAL"
+    },
+    "protected-only-account": {
+      "type": "username_password",
+      "username": "protected-demo-user",
+      "password": "SYNTHETIC_PROTECTED_ONLY_PASSWORD_NOT_REAL"
+    },
+    "https-bearer-token": {
+      "type": "token",
+      "value": "SYNTHETIC_HTTPS_BEARER_TOKEN_NOT_REAL"
+    },
+    "http-bearer-token": {
+      "type": "token",
+      "value": "SYNTHETIC_HTTP_BEARER_TOKEN_NOT_REAL"
+    },
+    "https-basic-account": {
+      "type": "username_password",
+      "username": "report-reader",
+      "password": "SYNTHETIC_HTTPS_BASIC_PASSWORD_NOT_REAL"
+    },
+    "https-api-key": {
+      "type": "token",
+      "value": "SYNTHETIC_HTTPS_API_KEY_NOT_REAL"
+    },
+    "process-env-token": {
+      "type": "token",
+      "value": "SYNTHETIC_PROCESS_ENV_TOKEN_NOT_REAL"
+    },
+    "stdin-raw-token": {
+      "type": "token",
+      "value": "SYNTHETIC_STDIN_RAW_TOKEN_NOT_REAL"
+    },
+    "stdin-line-token": {
+      "type": "token",
+      "value": "SYNTHETIC_STDIN_LINE_TOKEN_NOT_REAL"
+    }
+  },
+  "bindings": {
+    "external-status-query": {
+      "type": "http",
+      "credential_ref": "https-bearer-token",
+      "target": {
+        "scheme": "https",
+        "host": "api.example.test",
+        "port": 443
+      },
+      "request": {
+        "allowed_methods": [
+          "GET",
+          "HEAD"
+        ],
+        "allowed_paths": [
+          "/v1/status",
+          "/v1/health"
+        ],
+        "connect_timeout_seconds": 5,
+        "total_timeout_seconds": 30,
+        "max_response_body_bytes": 65536
+      },
+      "inject": {
+        "type": "bearer",
+        "location": "authorization_header"
+      },
+      "approval": "required"
+    },
+    "internal-health-query": {
+      "type": "http",
+      "credential_ref": "http-bearer-token",
+      "target": {
+        "scheme": "http",
+        "host": "test-api.internal.example.test",
+        "port": 8080
+      },
+      "request": {
+        "allowed_methods": [
+          "GET"
+        ],
+        "allowed_paths": [
+          "/health"
+        ],
+        "connect_timeout_seconds": 5,
+        "total_timeout_seconds": 30,
+        "max_response_body_bytes": 65536
+      },
+      "inject": {
+        "type": "bearer",
+        "location": "authorization_header"
+      },
+      "approval": "required"
+    },
+    "report-health-query": {
+      "type": "http",
+      "credential_ref": "https-basic-account",
+      "target": {
+        "scheme": "https",
+        "host": "reports.example.test",
+        "port": 443
+      },
+      "request": {
+        "allowed_methods": [
+          "GET"
+        ],
+        "allowed_paths": [
+          "/health"
+        ],
+        "connect_timeout_seconds": 5,
+        "total_timeout_seconds": 30,
+        "max_response_body_bytes": 65536
+      },
+      "inject": {
+        "type": "basic",
+        "location": "authorization_header"
+      },
+      "approval": "required"
+    },
+    "profile-query": {
+      "type": "http",
+      "credential_ref": "https-api-key",
+      "target": {
+        "scheme": "https",
+        "host": "platform.example.test",
+        "port": 443
+      },
+      "request": {
+        "allowed_methods": [
+          "GET"
+        ],
+        "allowed_paths": [
+          "/api/profile"
+        ],
+        "connect_timeout_seconds": 5,
+        "total_timeout_seconds": 30,
+        "max_response_body_bytes": 65536
+      },
+      "inject": {
+        "type": "api_key_header",
+        "header_name": "X-API-Key"
+      },
+      "approval": "required"
+    },
+    "service-status-check": {
+      "type": "process_env",
+      "credential_ref": "process-env-token",
+      "program": "/Users/example/.local/libexec/credential-guard/check-service",
+      "argv": [
+        "/Users/example/.local/libexec/credential-guard/check-service",
+        "--status"
+      ],
+      "env_name": "SERVICE_TOKEN",
+      "timeout_seconds": 30,
+      "max_stdout_bytes": 65536,
+      "max_stderr_bytes": 65536,
+      "approval": "required"
+    },
+    "artifact-upload-raw": {
+      "type": "stdin",
+      "credential_ref": "stdin-raw-token",
+      "program": "/Users/example/.local/libexec/credential-guard/fixed-upload-raw",
+      "argv": [
+        "/Users/example/.local/libexec/credential-guard/fixed-upload-raw"
+      ],
+      "stdin_format": "raw",
+      "timeout_seconds": 30,
+      "max_stdout_bytes": 65536,
+      "max_stderr_bytes": 65536,
+      "approval": "required"
+    },
+    "artifact-upload-line": {
+      "type": "stdin",
+      "credential_ref": "stdin-line-token",
+      "program": "/Users/example/.local/libexec/credential-guard/fixed-upload-line",
+      "argv": [
+        "/Users/example/.local/libexec/credential-guard/fixed-upload-line"
+      ],
+      "stdin_format": "line",
+      "timeout_seconds": 30,
+      "max_stdout_bytes": 65536,
+      "max_stderr_bytes": 65536,
+      "approval": "required"
+    }
+  }
+}
+```
+
+示例能力对应关系：
+
+| credential / binding | 含义 |
+|---|---|
+| `protected-only-token`、`protected-only-account` | 只保护，没有 binding，Agent 不能使用 |
+| `external-status-query` | HTTPS + Bearer，允许固定的 GET/HEAD 和两个精确路径 |
+| `internal-health-query` | 明文 HTTP + Bearer，每次审批必须显示明文传输警告 |
+| `report-health-query` | HTTPS + Basic Auth |
+| `profile-query` | HTTPS + `X-API-Key` |
+| `service-status-check` | 把 Token 临时注入固定程序的 `SERVICE_TOKEN` 环境变量 |
+| `artifact-upload-raw` | 将 Token 原样写入固定程序 stdin |
+| `artifact-upload-line` | 将 Token 加一个换行后写入固定程序 stdin |
+
+裁剪规则：
+
+1. 先删除不需要的 binding；
+2. 再删除没有被任何 binding 使用、且也不需要单独保护的 credential；
+3. 将 `.test` 目标替换为真实的小写 DNS 域名，不能填写 URL 或 IP；
+4. 将程序路径和 `argv[0]` 同时替换为同一个真实绝对路径；
+5. method 和 path 只开放实际需要的精确值，不使用“全开放”思路；
+6. 在本地编辑器中最后替换合成秘密，绝不把真实配置交给 Agent 或提交 Git；
+7. 保存后执行 `chmod 600 "$GUARD_CONFIG"`，再运行 `hermes -p "$PROFILE" credential-guard check`。
+
 ## HTTP/HTTPS Bearer 示例
 
 ```json

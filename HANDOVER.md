@@ -16,7 +16,7 @@ PASS。随后捕获的 1 次 `concurrent_no_cross=False` 已由 200 次压力测
 R0 测试 Harness 在两个线程中嵌套 process-global `unittest.mock.patch`；生产 `credential_guard`
 未参与。现已改为父线程单一 patch scope，并断言两个并发调用均返回成功；修复后累计 900 次压力
 复验零失败，专项 248 passed、全量 1718 passed / 3 xfailed / 0 failed，最终增量独立只读终审
-明确 PASS。未操作真实 default/worker；本轮发布收口改动尚未 commit/push。
+明确 PASS。打 Tag 前又为 README 增加 0.4.2 最全面完整配置：两种 credential、三种 binding、HTTP/HTTPS、Bearer/Basic/API Key Header、stdin raw/line 及全部资源限制字段均由生产 Schema 可执行门禁验证；对应专项 233 passed、全量更新为 1722 passed / 3 xfailed / 0 failed、ZIP E2E 2 passed。未操作真实 default/worker；本轮 README 增量尚未 commit/push。
 
 **R7：PASS（行政签收）** — 两个插件兼容性 Bug 已关闭，并获两路独立只读复审局部 PASS：
 （1）超长普通文本内嵌完全 Unicode-escape 合成 PEM 由有界 JSON-escape 子候选检出，
