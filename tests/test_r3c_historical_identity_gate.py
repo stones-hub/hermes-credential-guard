@@ -705,6 +705,7 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         ".r6-slice3-artifact-audit-task.md",
         "tests/support/artifact_composition_audit.py",
         "tests/test_r6_artifact_composition.py",
+        "tests/test_current_dist_policy.py",
         # R6 slice 4a source/task deltas. dist/ members stay out of this
         # enumerator (_SKIP_DIRS includes dist); 0.4.0 ZIP identity is pinned
         # by the installed-ZIP E2E harness + artifact composition tests.
@@ -774,20 +775,18 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
 
 
 def _r5_approved_deleted_paths() -> FrozenSet[str]:
-    """R5 approved deletions, derived from the signed topology gate constants.
+    """R5-era source deletions used for historical non-dist file accounting.
 
-    Prefix deletes must be expanded against `.r5-baseline-manifest.sha256`
-    rather than the live tree: after the atomic delete the live tree no longer
-    contains those members, so a live-tree expansion would silently yield 0.
+    The historical workspace enumerator skips ``dist/`` entirely, so later
+    retirement of old binary artifacts must not change this non-dist formula.
     """
     baseline = _r5_topology.load_baseline()
-    return frozenset(
-        _r5_topology.effective_deleted(
-            baseline,
-            deleted_paths=_r5_topology.R5_DELETED_PATHS,
-            deleted_prefixes=_r5_topology.R5_DELETED_PATH_PREFIXES,
-        )
+    deleted = _r5_topology.effective_deleted(
+        baseline,
+        deleted_paths=_r5_topology.R5_DELETED_PATHS,
+        deleted_prefixes=_r5_topology.R5_DELETED_PATH_PREFIXES,
     )
+    return frozenset(path for path in deleted if not path.startswith("dist/"))
 
 
 def _workspace_manifest(
@@ -930,34 +929,15 @@ def test_r3c_reclosure_mutation_exclude_unrelated_file_is_red():
     )
 
 
-def test_031_dist_artifacts_unchanged():
-    """0.3.1 dist historical artifacts must remain byte-stable vs frozen digests."""
-    import json
-
-    expected = {
-        "dist/artifact-manifest.json": (
-            "0c25b34a74d8e4deeaf9343328335d790bdab6018ac4ff4ef864686efaa2ebfa"
-        ),
-        "dist/credential-guard-0.3.1-hermes-plugin.zip": (
-            "7ebc8652d6a763a8ff9fa1d7596919e811bcff92b8eee572af30b61b54651ac6"
-        ),
-        "dist/hermes_credential_guard-0.3.1-py3-none-any.whl": (
-            "72b705f744b292ea2395c0e7ca70ef95b7ad25d9465fa0c42361f1bd511aeac3"
-        ),
-        "dist/hermes_credential_guard-0.3.1.tar.gz": (
-            "ea307f8f47a6328c8c8f3b8ff574d4d3c6c3cccf11b7328d7a54543759779bbb"
-        ),
+def test_031_dist_artifacts_are_retired_from_active_distribution():
+    """0.3.1 evidence stays in history, but obsolete binaries leave active dist/."""
+    retired = {
+        "dist/artifact-manifest.json",
+        "dist/credential-guard-0.3.1-hermes-plugin.zip",
+        "dist/hermes_credential_guard-0.3.1-py3-none-any.whl",
+        "dist/hermes_credential_guard-0.3.1.tar.gz",
     }
-    man = json.loads((REPO / "dist/artifact-manifest.json").read_text(encoding="utf-8"))
-    blob = json.dumps(man, sort_keys=True)
-    assert "0.3.1" in blob
-    for rel, digest in expected.items():
-        live = hashlib.sha256((REPO / rel).read_bytes()).hexdigest()
-        assert live == digest, f"{rel} drifted from frozen 0.3.1 identity"
-    tampered = hashlib.sha256(
-        (REPO / "dist/artifact-manifest.json").read_bytes() + b"\n#tamper\n"
-    ).hexdigest()
-    assert tampered != expected["dist/artifact-manifest.json"]
+    assert all(not (REPO / rel).exists() for rel in retired)
 
 
 def test_r3c_production_scope_no_new_adapter_type_backend_shell():

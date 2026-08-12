@@ -1,8 +1,8 @@
 """Real landed-artifact composition audit (no release build).
 
-Opens wheel / sdist / plugin ZIP already landed under ``dist/`` and checks
-member presence / absence. Historical 0.3.1 / 0.4.0 / 0.4.1 bytes stay frozen;
-current ``PLUGIN_VERSION`` (0.4.2+) is audited separately and must coexist.
+Opens the current wheel / sdist / plugin ZIP landed under ``dist/`` and checks
+member presence / absence. Historical release evidence remains in reports and
+freeze sidecars; obsolete binaries are not distributed from the active tree.
 
 Mutations M-1 / M-2 operate on *copies* of the current plugin ZIP only.
 """
@@ -38,53 +38,6 @@ from tests.support.artifact_composition_audit import (
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 
-# 0.3.1 historical freeze — must remain byte-identical.
-_HISTORICAL_031 = {
-    "artifact-manifest.json": (
-        "0c25b34a74d8e4deeaf9343328335d790bdab6018ac4ff4ef864686efaa2ebfa"
-    ),
-    "credential-guard-0.3.1-hermes-plugin.zip": (
-        "7ebc8652d6a763a8ff9fa1d7596919e811bcff92b8eee572af30b61b54651ac6"
-    ),
-    "hermes_credential_guard-0.3.1-py3-none-any.whl": (
-        "72b705f744b292ea2395c0e7ca70ef95b7ad25d9465fa0c42361f1bd511aeac3"
-    ),
-    "hermes_credential_guard-0.3.1.tar.gz": (
-        "ea307f8f47a6328c8c8f3b8ff574d4d3c6c3cccf11b7328d7a54543759779bbb"
-    ),
-}
-
-# 0.4.0 historical freeze — must coexist with later releases; never overwrite.
-_HISTORICAL_040 = {
-    "artifact-manifest-0.4.0.json": (
-        "be6f2e320cfff32abb81a0bf13701fc1a4e2fec93665f871c0c7c4a972724c7a"
-    ),
-    "credential-guard-0.4.0-hermes-plugin.zip": (
-        "1fbc8c38da81226ef8a98f50702f2b3f5b369c5ce4767b8d0de8b2aaad20908d"
-    ),
-    "hermes_credential_guard-0.4.0-py3-none-any.whl": (
-        "6c457db3641eabee532a380cf0135308dd4ac846c6926b65b00bbcee723b34cf"
-    ),
-    "hermes_credential_guard-0.4.0.tar.gz": (
-        "a7839c48d2f02550c4cfb95f394468783eee5ba18a301edc4e5f571dea9f987e"
-    ),
-}
-
-# 0.4.1 historical freeze — must coexist with 0.4.2; never overwrite.
-_HISTORICAL_041 = {
-    "artifact-manifest-0.4.1.json": (
-        "55b3bc87b9ac9311097e4661fcd0d5ccbef1084e02bdb1764b42201a91082358"
-    ),
-    "credential-guard-0.4.1-hermes-plugin.zip": (
-        "3bee46a83c45579faae693d8dd4f681d9128373014e36069eaabadbd1677d16c"
-    ),
-    "hermes_credential_guard-0.4.1-py3-none-any.whl": (
-        "df0f783ae1c8a2698e672bf0b4d54943cb3e48033a206c9d6649d9de3369de20"
-    ),
-    "hermes_credential_guard-0.4.1.tar.gz": (
-        "27e67907ecf13e8be5018206bdc54241e5196bc2eee0c149ce62192f18f65020"
-    ),
-}
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -97,27 +50,6 @@ def _current_landed_paths():
         "plugin_zip": DIST / PLUGIN_ZIP_FILENAME,
         "manifest": artifact_manifest_path(ROOT),
     }
-
-
-def test_historical_031_four_files_still_byte_frozen():
-    for name, digest in _HISTORICAL_031.items():
-        path = DIST / name
-        assert path.is_file(), name
-        assert _sha256(path) == digest, f"{name} drifted from 0.3.1 freeze"
-
-
-def test_historical_040_four_files_still_byte_frozen():
-    for name, digest in _HISTORICAL_040.items():
-        path = DIST / name
-        assert path.is_file(), name
-        assert _sha256(path) == digest, f"{name} drifted from 0.4.0 freeze"
-
-
-def test_historical_041_four_files_still_byte_frozen():
-    for name, digest in _HISTORICAL_041.items():
-        path = DIST / name
-        assert path.is_file(), name
-        assert _sha256(path) == digest, f"{name} drifted from 0.4.1 freeze"
 
 
 def test_landed_current_artifacts_exist_and_match_versioned_manifest():
@@ -151,13 +83,10 @@ def test_landed_current_artifacts_exist_and_match_versioned_manifest():
     )
 
 
-def test_dist_has_historical_and_current_release_files():
+def test_dist_has_current_release_files_only():
     names = sorted(p.name for p in DIST.iterdir() if p.is_file())
     expected = sorted(
-        set(_HISTORICAL_031)
-        | set(_HISTORICAL_040)
-        | set(_HISTORICAL_041)
-        | {
+        {
             WHEEL_FILENAME,
             SDIST_FILENAME,
             PLUGIN_ZIP_FILENAME,
@@ -165,7 +94,7 @@ def test_dist_has_historical_and_current_release_files():
         }
     )
     assert names == expected
-    assert len(expected) == 16
+    assert len(expected) == 4
 
 
 def test_plugin_zip_composition_clean_and_complete():

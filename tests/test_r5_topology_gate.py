@@ -97,10 +97,9 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         ".r6-slice3-artifact-audit-task.md",
         "tests/support/artifact_composition_audit.py",
         "tests/test_r6_artifact_composition.py",
-        "dist/artifact-manifest-0.4.0.json",
-        "dist/credential-guard-0.4.0-hermes-plugin.zip",
-        "dist/hermes_credential_guard-0.4.0-py3-none-any.whl",
-        "dist/hermes_credential_guard-0.4.0.tar.gz",
+        # Current release distribution policy: the active tree ships only 0.4.2.
+        # Historical release reports and freeze sidecars remain, but old binaries do not.
+        "tests/test_current_dist_policy.py",
         # R6 slice 4a: installed-ZIP approval-chain E2E (opt-in; outside
         # tests/test_*.py), shared ZIP install helpers, dedicated runner, and
         # the self-proving opt-in gate. Task file is the slice brief.
@@ -158,10 +157,8 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         "tests/test_r7_041_final_zip_optin_gate.py",
         "scripts/run_r7_041_final_zip_e2e.py",
         "scripts/run_r7_041_final_zip_tests.py",
-        "dist/artifact-manifest-0.4.1.json",
-        "dist/credential-guard-0.4.1-hermes-plugin.zip",
-        "dist/hermes_credential_guard-0.4.1-py3-none-any.whl",
-        "dist/hermes_credential_guard-0.4.1.tar.gz",
+        # Historical 0.4.1 reports/harnesses remain for traceability; their old
+        # binary release artifacts are intentionally absent from active dist/.
         # R8 / 0.4.2: HTTP+HTTPS unified credential request (task, evidence, scheme, tests).
         # Workspace also gained repo root .gitignore + LICENSE (git init metadata) which
         # are outside the R5 baseline and must be classified as added, not preserved.
@@ -214,6 +211,12 @@ R5_DELETED_PATHS: FrozenSet[str] = frozenset(
         "tests/support/mysql_harness.py",
         "tests/support/mysql_write_probe.py",
         "tests/support/ssh_harness.py",
+        # Current distribution retirement: historical 0.3.1 binaries were in the
+        # signed baseline, so their removal is an explicit approved deletion.
+        "dist/artifact-manifest.json",
+        "dist/credential-guard-0.3.1-hermes-plugin.zip",
+        "dist/hermes_credential_guard-0.3.1-py3-none-any.whl",
+        "dist/hermes_credential_guard-0.3.1.tar.gz",
     }
 )
 
