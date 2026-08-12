@@ -173,17 +173,43 @@ class _NoRedirectHandler:
         return _NoRedirect()
 
 
-def _build_production_opener(ctx, *, connect_timeout: float, deadline: float):
-    """Construct opener with empty proxy, no-redirect, TLS on HTTPSHandler.
+def _build_production_opener(ctx, *, connect_timeout: float, deadline: float, scheme: str):
+    """Construct opener with empty proxy, no-redirect, scheme-specific handler.
 
     ``connect_timeout`` applies to TCP connect; ``deadline`` (monotonic) bounds
     post-connect socket I/O. Never pass ``context=`` to ``opener.open``.
     Never install the default env-reading ProxyHandler.
+    HTTPS uses TLS via HTTPSHandler(context=...); HTTP uses plain HTTPHandler
+    (no TLS wrap — plaintext by design).
     """
     import http.client
     import socket
     import time
     import urllib.request
+
+    if scheme not in {"http", "https"}:
+        raise HttpAdapterError("HTTP_ADAPTER_FAILED")
+
+    class _DeadlineHTTPConnection(http.client.HTTPConnection):
+        def connect(self):  # noqa: ANN001
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("deadline")
+            to = min(float(connect_timeout), remaining)
+            self.sock = socket.create_connection(
+                (self.host, self.port), to, self.source_address
+            )
+            if self._tunnel_host:
+                try:
+                    self._tunnel()
+                except Exception:
+                    self.sock.close()
+                    raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self.sock.close()
+                raise TimeoutError("deadline")
+            self.sock.settimeout(remaining)
 
     class _DeadlineHTTPSConnection(http.client.HTTPSConnection):
         def connect(self):  # noqa: ANN001
@@ -210,6 +236,10 @@ def _build_production_opener(ctx, *, connect_timeout: float, deadline: float):
             context = self._context if self._context is not None else ctx
             self.sock = context.wrap_socket(sys_sock, server_hostname=self.host)
 
+    class _DeadlineHTTPHandler(urllib.request.HTTPHandler):
+        def http_open(self, req):  # noqa: ANN001
+            return self.do_open(_DeadlineHTTPConnection, req)
+
     class _DeadlineHTTPSHandler(urllib.request.HTTPSHandler):
         def __init__(self) -> None:
             super().__init__(context=ctx)
@@ -217,11 +247,15 @@ def _build_production_opener(ctx, *, connect_timeout: float, deadline: float):
         def https_open(self, req):  # noqa: ANN001
             return self.do_open(_DeadlineHTTPSConnection, req, context=self._context)
 
-    return urllib.request.build_opener(
+    handlers = [
         urllib.request.ProxyHandler({}),
         _NoRedirectHandler.build(),
-        _DeadlineHTTPSHandler(),
-    )
+    ]
+    if scheme == "https":
+        handlers.append(_DeadlineHTTPSHandler())
+    else:
+        handlers.append(_DeadlineHTTPHandler())
+    return urllib.request.build_opener(*handlers)
 
 
 # Fixed allowlist for deadline socket discovery (no arbitrary object-graph walk).
@@ -298,16 +332,19 @@ def _read_body_with_deadline(reader, *, max_body: int, deadline: float) -> bytes
 
 
 def _default_transport(request: Dict[str, Any]) -> Dict[str, Any]:
-    """Production HTTPS transport: no env proxy, no redirects, verify required."""
+    """Production HTTP/HTTPS transport: no env proxy, no redirects; HTTPS verify required."""
     import ssl
     import time
     import urllib.error
+    import urllib.parse
     import urllib.request
 
     if request.get("allow_redirects"):
         raise HttpAdapterError("HTTP_ADAPTER_FAILED")
     if request.get("trust_env"):
         raise HttpAdapterError("HTTP_ADAPTER_FAILED")
+    # Shared request contract: verify must stay True so callers cannot disable
+    # HTTPS TLS via verify=False. Plain HTTP does not perform TLS.
     if request.get("verify") is not True:
         raise HttpAdapterError("HTTP_ADAPTER_FAILED")
 
@@ -315,18 +352,26 @@ def _default_transport(request: Dict[str, Any]) -> Dict[str, Any]:
         total_timeout = float(request["total_timeout_seconds"])
         connect_timeout = float(request["connect_timeout_seconds"])
         max_body = int(request["max_response_body_bytes"])
+        url = request["url"]
+        if not isinstance(url, str) or not url:
+            raise HttpAdapterError("HTTP_ADAPTER_FAILED")
     except (KeyError, TypeError, ValueError):
         raise HttpAdapterError("HTTP_ADAPTER_FAILED") from None
     if total_timeout <= 0 or connect_timeout <= 0 or max_body <= 0:
         raise HttpAdapterError("HTTP_ADAPTER_FAILED")
 
+    parsed = urllib.parse.urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in {"http", "https"}:
+        raise HttpAdapterError("HTTP_ADAPTER_FAILED")
+
     deadline = time.monotonic() + total_timeout
-    ctx = ssl.create_default_context()
+    ctx = ssl.create_default_context() if scheme == "https" else None
     opener = _build_production_opener(
-        ctx, connect_timeout=connect_timeout, deadline=deadline
+        ctx, connect_timeout=connect_timeout, deadline=deadline, scheme=scheme
     )
     req = urllib.request.Request(
-        request["url"],
+        url,
         data=None,
         headers=dict(request.get("headers") or {}),
         method=request["method"],
@@ -355,7 +400,8 @@ def _default_transport(request: Dict[str, Any]) -> Dict[str, Any]:
         except HttpAdapterError:
             raise
         except Exception:
-            body = b""
+            # Timeout / OSError / any read failure must not masquerade as empty body.
+            raise HttpAdapterError("HTTP_ADAPTER_FAILED") from None
         return {"status": status, "headers": raw_headers, "body": body}
     except Exception:
         raise HttpAdapterError("HTTP_ADAPTER_FAILED") from None
@@ -369,7 +415,7 @@ def execute_http(
     lease: SecretLease,
     transport: Optional[TransportFn] = None,
 ) -> Dict[str, Any]:
-    """Execute one HTTPS request. Never accepts model host/URL/Authorization."""
+    """Execute one HTTP/HTTPS request. Never accepts model host/URL/Authorization."""
     secrets_for_scrub: list[str] = []
     materials: list[tuple[str, str]] = []
     try:
@@ -385,7 +431,8 @@ def execute_http(
             return _safe_fail("HTTP_BINDING_INVALID")
         if not isinstance(credential_ref, str) or not credential_ref:
             return _safe_fail("HTTP_BINDING_INVALID")
-        if target.get("scheme") != "https":
+        scheme = target.get("scheme")
+        if scheme not in {"http", "https"}:
             return _safe_fail("HTTP_BINDING_INVALID")
         host = target.get("host")
         port = target.get("port")
@@ -422,7 +469,7 @@ def execute_http(
         except InjectionError:
             return _safe_fail("HTTP_INJECT_FAILED")
 
-        url = f"https://{host}:{port}{path_s}"
+        url = f"{scheme}://{host}:{port}{path_s}"
         transport_req: Dict[str, Any] = {
             "method": method_s,
             "url": url,

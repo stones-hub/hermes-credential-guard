@@ -18,13 +18,13 @@
 
 ## 目录结构
 
-- `plugin.yaml`：插件清单（当前版本 0.4.1）
+- `plugin.yaml`：插件清单（当前版本 0.4.2）
 - `__init__.py`：Hermes 目录插件入口（加载为 `hermes_plugins.credential_guard`）
 - `credential_guard/`：生产代码（包内相对导入；**不含** test fixture）
 - `tests/`：单元、PluginManager 加载、真实 Hermes CLI E2E
 - `tests/companions/credential_guard_test/`：仅测试用 companion（诱饵加载 + 故障注入）
 - `tests/support/`：loopback 启动器、MySQL/SSH harness（不进入发布物）
-- `scripts/run_canary_e2e.py` / `run_m2_e2e.py` / `run_m3_e2e.py` / `run_final_zip_encoding_canary.py`：可独立复跑的 E2E
+- `scripts/run_canary_e2e.py` / `scripts/run_final_zip_encoding_canary.py`：可独立复跑的 E2E（历史 `run_m2_e2e.py` / `run_m3_e2e.py` 已随旧架构删除）
 
 ## 双文件与审批口径
 
@@ -49,8 +49,6 @@ token 与用户输入的 key/field/secret 解耦，保证任意合法输入下 t
 
 # 真实 Hermes CLI E2E（调用本机 hermes / Python 3.11）
 .venv/bin/python scripts/run_canary_e2e.py
-.venv/bin/python scripts/run_m2_e2e.py
-.venv/bin/python scripts/run_m3_e2e.py
 .venv/bin/python scripts/build_release_artifacts.py
 .venv/bin/python scripts/run_final_zip_encoding_canary.py
 ```

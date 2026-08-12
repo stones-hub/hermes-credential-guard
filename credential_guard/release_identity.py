@@ -44,7 +44,7 @@ _SKIP_DIR_NAMES = {
 
 # Must match scripts/build_release_artifacts.py (kept here to avoid importing
 # the builder into the runtime plugin path).
-PLUGIN_VERSION = "0.4.1"
+PLUGIN_VERSION = "0.4.2"
 EXPECTED_SOURCE_DATE_EPOCH = 1704067200
 EXPECTED_PYTHONHASHSEED = "0"
 EXPECTED_TZ = "UTC"

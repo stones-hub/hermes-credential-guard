@@ -19,7 +19,7 @@
 - `docs/Credential-Guard-通用凭证边界重构方案.md`
 - `docs/Credential-Guard-通用凭证边界实施计划.md`
 
-当前状态（2026-08-11）：
+当前状态（2026-08-12）：
 
 ```text
 R0：PASS
@@ -45,7 +45,11 @@ Hermes auxiliary_client.call_llm（title/compression/vision/oneshot/session_sear
 主聊天 conversation loop 与主链工具结果受保护；关闭自动标题只能减少一条暴露路径。
 插件不修改 Hermes、不 monkey patch、不声称覆盖全部模型外发。
 详见 docs/R7-Hermes当前版本真实外发兼容性修复方案.md；R8 统一拦截方案已否决禁止执行。
-0.4.1 发布候选见 docs/R7-0.4.1-验收报告.md（待主代理独立复跑与两路只读终审）。
+0.4.1 发布候选见 docs/R7-0.4.1-验收报告.md。
+R8 / 0.4.2：HTTP 与 HTTPS 统一凭证请求（技术候选）—— `target.scheme` 精确接受
+小写 `http`/`https`；共用禁代理/禁重定向/deadline/结果脱敏；HTTP 审批固定明文风险提示；
+HTTPS TLS 校验保留。方案：docs/R8-0.4.2-HTTP与HTTPS统一凭证请求方案.md；
+验收：docs/R8-0.4.2-验收报告.md。未签收发布；未操作正式 worker。
 ```
 
 R5 关键事实：删除 50 个批准文件（7 个生产模块 + 整个 vendored PyMySQL + 17 个旧测试脚本），

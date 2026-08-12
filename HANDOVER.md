@@ -1,6 +1,14 @@
 # HANDOVER
 
-## 当前状态（2026-08-11）
+## 当前状态（2026-08-12）
+
+**R8 / 0.4.2：PASS（2026-08-12 技术签收；HTTP+HTTPS 统一凭证请求）** — `http_credential_request` 单一
+binding 的 `target.scheme` 精确接受小写 `http`/`https`；共用禁代理、禁重定向、timeout、
+响应上限与统一结果守卫；HTTP 审批固定明文传输警告；HTTPS TLS 校验保留；无第二套执行器、
+无 CIDR/`network_policy`。方案：`docs/R8-0.4.2-HTTP与HTTPS统一凭证请求方案.md`；
+designated 报告：`docs/R8-0.4.2-验收报告.md`。主代理独立全量 1705 passed / 3 xfailed /
+0 failed，第二轮两路只读终审均 PASS；候选身份 `97280c65…b43c`。未操作真实 default/worker；
+未 commit/push。
 
 **R7：PASS（行政签收）** — 两个插件兼容性 Bug 已关闭，并获两路独立只读复审局部 PASS：
 （1）超长普通文本内嵌完全 Unicode-escape 合成 PEM 由有界 JSON-escape 子候选检出，
@@ -13,13 +21,11 @@ compileall exit 0。
 与主链工具结果受保护；`auxiliary_client.call_llm`（title/compression/vision/oneshot/
 session_search 等）属于 Hermes 当前插件接口不覆盖的宿主能力边界，**不是**本插件待修 Bug。
 关闭 `auxiliary.title_generation` 只能减少一条暴露路径，不能等同于全覆盖。不修改 Hermes、
-不 monkey patch、不声称覆盖全部模型外发。R8 统一拦截方案保持「已否决、禁止执行」。
+不 monkey patch、不声称覆盖全部模型外发。否决的「统一拦截全部模型外发」方案保持禁止执行；
+本里程碑的 R8 仅指 HTTP/HTTPS 统一凭证请求，与该否决项无关。
 方案：`docs/R7-Hermes当前版本真实外发兼容性修复方案.md`。
 
-**0.4.1 发布候选已完成（未签收发布）**：源码升版、双构建 `copy2`、成分审计与隔离安装
-E2E 均完成；designated 报告 `docs/R7-0.4.1-验收报告.md`；全量非构建
-`1640 passed, 3 xfailed, 0 failed`。待主代理独立复跑和两路只读终审；
-不得自行签收发布，不得操作真实 default/worker。
+**0.4.1 发布候选已完成（未签收发布）**：见 `docs/R7-0.4.1-验收报告.md`。
 
 Credential Guard 正在从 0.3.1 的固定 MySQL/SSH 动作架构，重构为“外发脱敏 + 审批后通用本地注入 + 结果脱敏”的配置化凭证边界。
 

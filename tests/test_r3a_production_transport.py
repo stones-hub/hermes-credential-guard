@@ -267,7 +267,7 @@ def test_b2_connect_timeout_used_on_connection_seam(monkeypatch):
     def _boom(*_a, **_k):
         raise http_adapter.HttpAdapterError("HTTP_ADAPTER_FAILED")
 
-    def _wrap(ctx, *, connect_timeout, deadline):
+    def _wrap(ctx, *, connect_timeout, deadline, scheme="https"):
         seen["connect_timeout"] = float(connect_timeout)
         seen["has_deadline"] = deadline > 0
         return type("O", (), {"open": staticmethod(_boom), "handlers": []})()
@@ -320,7 +320,7 @@ def test_b2_total_deadline_blocks_slow_httperror_body(monkeypatch):
             _SlowDripFP(),
         )
 
-    def _wrap(ctx, *, connect_timeout, deadline):
+    def _wrap(ctx, *, connect_timeout, deadline, scheme="https"):
         return type("O", (), {"open": staticmethod(_raise_httperror), "handlers": []})()
 
     monkeypatch.setattr(http_adapter, "_build_production_opener", _wrap)
@@ -371,7 +371,7 @@ def test_b2_mutation_httperror_body_without_post_deadline_returns_status(monkeyp
             _SlowOversizeFP(),
         )
 
-    def _wrap(ctx, *, connect_timeout, deadline):
+    def _wrap(ctx, *, connect_timeout, deadline, scheme="https"):
         return type("O", (), {"open": staticmethod(_raise_httperror), "handlers": []})()
 
     # Same bounded loop as production, but post-read / post-loop deadline checks deleted.
@@ -497,7 +497,7 @@ def test_b2_httperror_nested_response_pushes_remaining_deadline_to_socket(monkey
             nested,
         )
 
-    def _wrap(ctx, *, connect_timeout, deadline):
+    def _wrap(ctx, *, connect_timeout, deadline, scheme="https"):
         return type("O", (), {"open": staticmethod(_raise_httperror), "handlers": []})()
 
     monkeypatch.setattr(http_adapter, "_build_production_opener", _wrap)
@@ -545,7 +545,7 @@ def test_b2_mutation_httperror_nested_shallow_unwrap_skips_socket_deadline(monke
             nested,
         )
 
-    def _wrap(ctx, *, connect_timeout, deadline):
+    def _wrap(ctx, *, connect_timeout, deadline, scheme="https"):
         return type("O", (), {"open": staticmethod(_raise_httperror), "handlers": []})()
 
     def _shallow_read(reader, *, max_body: int, deadline: float) -> bytes:
@@ -613,7 +613,7 @@ def test_b2_mutation_httperror_nested_shallow_unwrap_skips_socket_deadline(monke
     monkeypatch.setattr(
         http_adapter,
         "_build_production_opener",
-        lambda ctx, *, connect_timeout, deadline: type(
+        lambda ctx, *, connect_timeout, deadline, scheme="https": type(
             "O", (), {"open": staticmethod(_raise2), "handlers": []}
         )(),
     )
@@ -670,7 +670,7 @@ def test_b2_ok_response_nested_fp_raw_sock_also_gets_deadline(monkeypatch):
     def _open(_fullurl, data=None, timeout=None, **_kwargs):
         return _OkResp(sock)
 
-    def _wrap(ctx, *, connect_timeout, deadline):
+    def _wrap(ctx, *, connect_timeout, deadline, scheme="https"):
         return type("O", (), {"open": staticmethod(_open), "handlers": []})()
 
     monkeypatch.setattr(http_adapter, "_build_production_opener", _wrap)
@@ -795,3 +795,110 @@ def test_b2_output_headers_are_allowlist_bounded_not_wire_parse_limit():
     assert "max_response_header_bytes" not in body
     assert "_filter_response_headers" in body
     assert "_SAFE_RESPONSE_HEADERS" in body
+
+
+def _start_loopback_http_server(handler_cls):
+    """Bind loopback HTTPServer on an ephemeral port; caller must shutdown."""
+    import http.server
+    import socket
+    import threading
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    server = http.server.HTTPServer(("127.0.0.1", port), handler_cls, bind_and_activate=False)
+    server.server_bind()
+    server.server_activate()
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, port
+
+
+def test_b2_httperror_slow_body_after_headers_fail_closed_real_loopback(monkeypatch):
+    """HTTPError path: delayed body past total deadline must raise, not return empty body.
+
+    Real loopback + production ``_default_transport`` (no fake opener / fake clock).
+    """
+    import http.server
+    import time
+
+    for k in list(__import__("os").environ):
+        if "proxy" in k.lower():
+            monkeypatch.delenv(k, raising=False)
+
+    class _Slow503(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(503)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", "16")
+            self.end_headers()
+            # Hold body past client total_timeout so socket read times out.
+            time.sleep(2.5)
+            try:
+                self.wfile.write(b"x" * 16)
+                self.wfile.flush()
+            except Exception:
+                return
+
+        def log_message(self, fmt, *args):  # noqa: A003
+            return
+
+    server, port = _start_loopback_http_server(_Slow503)
+    try:
+        t0 = time.monotonic()
+        with pytest.raises(http_adapter.HttpAdapterError) as ei:
+            http_adapter._default_transport(
+                _base_request(
+                    url=f"http://127.0.0.1:{port}/v1",
+                    connect_timeout_seconds=1,
+                    total_timeout_seconds=1,
+                    max_response_body_bytes=4096,
+                )
+            )
+        elapsed = time.monotonic() - t0
+        assert ei.value.code == "HTTP_ADAPTER_FAILED"
+        assert "503" not in repr(ei.value)
+        assert "127.0.0.1" not in repr(ei.value)
+        assert elapsed < 3.0
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_b2_httperror_fast_error_body_still_returns_status(monkeypatch):
+    """Fast 4xx/5xx with immediate body must still return real status/body (not all fail)."""
+    import http.server
+
+    for k in list(__import__("os").environ):
+        if "proxy" in k.lower():
+            monkeypatch.delenv(k, raising=False)
+
+    class _Fast503(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            body = b"unavailable"
+            self.send_response(503)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, fmt, *args):  # noqa: A003
+            return
+
+    server, port = _start_loopback_http_server(_Fast503)
+    try:
+        out = http_adapter._default_transport(
+            _base_request(
+                url=f"http://127.0.0.1:{port}/v1",
+                connect_timeout_seconds=2,
+                total_timeout_seconds=5,
+                max_response_body_bytes=4096,
+            )
+        )
+        assert out["status"] == 503
+        assert out["body"] == b"unavailable"
+    finally:
+        server.shutdown()
+        server.server_close()

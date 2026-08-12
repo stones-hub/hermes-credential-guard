@@ -162,6 +162,26 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         "dist/credential-guard-0.4.1-hermes-plugin.zip",
         "dist/hermes_credential_guard-0.4.1-py3-none-any.whl",
         "dist/hermes_credential_guard-0.4.1.tar.gz",
+        # R8 / 0.4.2: HTTP+HTTPS unified credential request (task, evidence, scheme, tests).
+        # Workspace also gained repo root .gitignore + LICENSE (git init metadata) which
+        # are outside the R5 baseline and must be classified as added, not preserved.
+        ".gitignore",
+        "LICENSE",
+        ".r8-http-support-task.md",
+        ".r8-http-tdd-evidence.log",
+        ".r8-round2-blocking-fix-task.md",
+        "docs/R8-0.4.2-HTTP与HTTPS统一凭证请求方案.md",
+        "tests/test_r8_http_https_unified.py",
+        # R8 release 0.4.2: designated report, ZIP E2E, versioned dist members.
+        "docs/R8-0.4.2-验收报告.md",
+        "tests/r8_042_final_zip_e2e.py",
+        "tests/test_r8_042_final_zip_optin_gate.py",
+        "scripts/run_r8_042_final_zip_e2e.py",
+        "scripts/run_r8_042_final_zip_tests.py",
+        "dist/artifact-manifest-0.4.2.json",
+        "dist/credential-guard-0.4.2-hermes-plugin.zip",
+        "dist/hermes_credential_guard-0.4.2-py3-none-any.whl",
+        "dist/hermes_credential_guard-0.4.2.tar.gz",
     }
 )
 
@@ -269,6 +289,11 @@ R5_MODIFIED_PATHS: FrozenSet[str] = frozenset(
         "docs/R5-旧架构彻底清理-严格TDD实施计划.md",
         "docs/R5-旧架构彻底清理-落地方案.md",
         "docs/Credential-Guard-通用凭证边界实施计划.md",
+        # R8: HTTP/HTTPS unified transport + gate flips (content drifted from baseline).
+        "credential_guard/adapters/http.py",
+        "tests/test_r3a_http_binding_schema.py",
+        "tests/test_r3a_production_transport.py",
+        "tests/test_r3c_evidence_authenticity_gate.py",
     }
 )
 

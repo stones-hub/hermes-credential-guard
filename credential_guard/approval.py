@@ -140,15 +140,25 @@ def _reference_approval_message(
     except ValueError as exc:
         raise ValueError("unsafe_operation") from exc
     inject = safe_inject_summary(meta, getattr(plan, "binding_type", "") or "")
-    return (
-        "Credential Guard 请求使用本机凭证\n"
-        f"工具：{plan.tool_name}\n"
-        f"业务目标：{plan.target_name}\n"
-        f"逻辑凭证：{plan.credential_name}\n"
-        f"操作：{op}\n"
-        f"注入方式：{inject}\n"
-        "审批范围：仅本次调用"
-    )
+    scheme = ""
+    if isinstance(meta, dict):
+        raw_scheme = meta.get("scheme")
+        if isinstance(raw_scheme, str):
+            scheme = raw_scheme
+    lines = [
+        "Credential Guard 请求使用本机凭证",
+        f"工具：{plan.tool_name}",
+        f"业务目标：{plan.target_name}",
+        f"逻辑凭证：{plan.credential_name}",
+        f"操作：{op}",
+        f"注入方式：{inject}",
+    ]
+    if scheme == "http":
+        lines.append(
+            "警告：该目标使用明文 HTTP，凭证在网络传输过程中不会被加密。"
+        )
+    lines.append("审批范围：仅本次调用")
+    return "\n".join(lines)
 
 
 def _handle_reference_approval(
@@ -264,13 +274,57 @@ def _handle_reference_approval(
         except PlanStoreError:
             pass
         return dict(_REF_BLOCK)
-    # Fixed template is exactly 7 lines; extra breaks mean path smuggled structure.
-    if message.count("\n") != 6:
+    # Fixed template gate — scheme from trusted scrubbed meta, never from message text.
+    # HTTP: exactly 8 lines; plaintext warning once as penultimate line.
+    # HTTPS: exactly 7 lines; must not carry the HTTP plaintext warning.
+    # Process / non-http: keep the historical 7-line template.
+    _HTTP_PLAINTEXT_WARNING = (
+        "警告：该目标使用明文 HTTP，凭证在网络传输过程中不会被加密。"
+    )
+    lines = message.split("\n")
+    newline_count = message.count("\n")
+    binding_type = ""
+    scheme = None
+    if isinstance(meta, dict):
+        raw_type = meta.get("type")
+        if isinstance(raw_type, str):
+            binding_type = raw_type
+        raw_scheme = meta.get("scheme")
+        if isinstance(raw_scheme, str):
+            scheme = raw_scheme
+    if not binding_type:
+        binding_type = str(getattr(pending, "binding_type", "") or "")
+
+    def _invalidate_block() -> Dict[str, str]:
         try:
             store.invalidate(session_id, tool_call_id)
         except PlanStoreError:
             pass
         return dict(_REF_BLOCK)
+
+    if binding_type == "http":
+        if scheme == "http":
+            if newline_count != 7 or len(lines) != 8:
+                return _invalidate_block()
+            if lines.count(_HTTP_PLAINTEXT_WARNING) != 1:
+                return _invalidate_block()
+            if lines[-2] != _HTTP_PLAINTEXT_WARNING:
+                return _invalidate_block()
+            if lines[-1] != "审批范围：仅本次调用":
+                return _invalidate_block()
+        elif scheme == "https":
+            if newline_count != 6 or len(lines) != 7:
+                return _invalidate_block()
+            if _HTTP_PLAINTEXT_WARNING in message or "明文 HTTP" in message:
+                return _invalidate_block()
+        else:
+            # Missing or non http/https scheme on HTTP binding: fail closed.
+            return _invalidate_block()
+    else:
+        if newline_count != 6 or len(lines) != 7:
+            return _invalidate_block()
+        if _HTTP_PLAINTEXT_WARNING in message or "明文 HTTP" in message:
+            return _invalidate_block()
     return {
         "action": "approve",
         "message": message,

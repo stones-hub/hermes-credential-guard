@@ -458,12 +458,27 @@ def test_rejects_illegal_hosts(tmp_path: Path, host: str):
     assert host not in f"{ei.value!s}{ei.value!r}"
 
 
-def test_rejects_http_scheme(tmp_path: Path):
+def test_accepts_http_and_https_schemes(tmp_path: Path):
+    """R8: binding scheme may be exact lowercase http or https."""
+    decoy = _decoy()
+    for scheme, port in (("http", 8080), ("https", 443)):
+        doc = _minimal_token_http(decoy)
+        doc["bindings"]["internal-api"]["target"]["scheme"] = scheme
+        doc["bindings"]["internal-api"]["target"]["port"] = port
+        cfg = CredentialGuardConfig.load(
+            _write_config(tmp_path / f"ok-{scheme}.json", doc)
+        )
+        assert cfg.bindings["internal-api"]["target"]["scheme"] == scheme
+
+
+@pytest.mark.parametrize("bad", ["ftp", "file", "ws", "HTTP", "HTTPS"])
+def test_rejects_illegal_schemes(tmp_path: Path, bad: str):
     decoy = _decoy()
     doc = _minimal_token_http(decoy)
-    doc["bindings"]["internal-api"]["target"]["scheme"] = "http"
-    with pytest.raises(ConfigError):
-        CredentialGuardConfig.load(_write_config(tmp_path / CONFIG_FILENAME, doc))
+    doc["bindings"]["internal-api"]["target"]["scheme"] = bad
+    with pytest.raises(ConfigError) as ei:
+        CredentialGuardConfig.load(_write_config(tmp_path / f"bad-{bad}.json", doc))
+    assert ei.value.code == "CONFIG_SCHEMA"
 
 
 @pytest.mark.parametrize("port", [0, -1, 65536, 1.5, "443"])

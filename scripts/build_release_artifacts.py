@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN_VERSION = "0.4.1"
+PLUGIN_VERSION = "0.4.2"
 WHEEL_NAME = f"hermes_credential_guard-{PLUGIN_VERSION}-py3-none-any.whl"
 SDIST_NAME = f"hermes_credential_guard-{PLUGIN_VERSION}.tar.gz"
 PLUGIN_ZIP_NAME = f"credential-guard-{PLUGIN_VERSION}-hermes-plugin.zip"

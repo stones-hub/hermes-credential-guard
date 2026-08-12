@@ -173,7 +173,7 @@ def test_a1_binding_and_target_digests_cover_execution_fields(isolated_runtime: 
     [
         lambda d: d["bindings"]["jenkins-production"].__setitem__("extra", 1),
         lambda d: d["bindings"]["jenkins-production"]["target"].__setitem__(
-            "scheme", "http"
+            "scheme", "ftp"
         ),
         lambda d: d["bindings"]["jenkins-production"]["target"].__setitem__(
             "host", "127.0.0.1"

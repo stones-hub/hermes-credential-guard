@@ -1,0 +1,201 @@
+R8 / 0.4.2 HTTP+HTTPS UNIFIED CREDENTIAL REQUEST — STRICT VERTICAL TDD EVIDENCE
+STATUS=STARTED
+DATE=2026-08-12
+SCOPE=local repo only; synthetic decoys; temp HOME/HERMES_HOME; loopback only
+BOUNDARIES=no SSH; no real profiles/credentials; no Hermes edits; no commit/push; no formal plugin install
+
+==== SLICE_A_SCHEMA_AND_SUMMARY ====
+PHASE=RED
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py -q -p no:cacheprovider
+EXIT=1
+RESULT=4 failed, 9 passed
+FAILURE_CLASS=missing_capability
+FAILED=
+  test_r8_a_http_scheme_loads_and_is_preserved (scheme!=https rejected)
+  test_r8_a_http_https_swap_changes_both_digests (http load fails)
+  test_r8_a_scrubbed_meta_exposes_scheme_not_host_port (http load fails)
+  test_r8_a_operation_summary_uses_binding_scheme (http load fails)
+PASSED=illegal schemes + https still loads
+NOTE=RED from missing http/https dual scheme — not syntax
+
+PHASE=GREEN_IMPLEMENTATION
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py -q -p no:cacheprovider
+EXIT=0
+RESULT=13 passed
+SLICE_A=GREEN
+PRODUCTION_TOUCHED=credential_guard/bindings.py,credential_guard/runtime_config.py
+NOTE=accept exact lowercase http|https; preserve scheme; scrubbed meta.scheme; scheme in binding_digest; operation_summary uses scheme
+
+==== SLICE_B_UNIFIED_TRANSPORT ====
+PHASE=RED
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py -q -p no:cacheprovider
+EXIT=1
+RESULT=2 failed, 18 passed
+FAILURE_CLASS=missing_capability
+FAILED=
+  test_r8_b_execute_http_builds_url_from_binding_scheme (scheme http rejected / URL hardcoded https)
+  test_r8_b_default_transport_http_uses_http_handler_no_proxy_no_redirect (no explicit HTTPHandler)
+NOTE=loopback HTTP already partially works via urllib defaults; explicit HTTPHandler + scheme URL still RED
+
+PHASE=GREEN_IMPLEMENTATION
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py tests/test_r3a_production_transport.py tests/test_r3_http_adapter.py -q -p no:cacheprovider
+EXIT=0
+RESULT=47 passed
+SLICE_B=GREEN
+PRODUCTION_TOUCHED=credential_guard/adapters/http.py
+TEST_SYNC=tests/test_r3a_production_transport.py (_wrap accepts scheme=)
+
+==== SLICE_C_INJECT_AND_RESULT_GUARD ====
+PHASE=RED
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py -k r8_c_ -q -p no:cacheprovider
+EXIT=0
+RESULT=4 passed
+SLICE_C=GREEN
+NOTE=capability delivered by A+B; C tests confirm HTTP Bearer/Basic/API-Key real loopback scrub + deny/replay/scheme-swap zero downstream
+
+==== SLICE_D_APPROVAL_WARNING ====
+PHASE=RED
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py -k r8_d_ -q -p no:cacheprovider
+EXIT=1
+RESULT=2 failed, 1 passed
+FAILURE_CLASS=missing_capability
+FAILED=
+  test_r8_d_http_approval_includes_plaintext_warning
+  test_r8_d_mutation_http_warning_gate_is_load_bearing
+PASSED=https omits warning (pre-existing 7-line template)
+
+PHASE=GREEN_IMPLEMENTATION
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py -k r8_d_ -q -p no:cacheprovider
+EXIT=0
+RESULT=3 passed
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_reference_approval.py -q -p no:cacheprovider
+EXIT=0
+RESULT=16 passed
+SLICE_D=GREEN
+PRODUCTION_TOUCHED=credential_guard/approval.py,credential_guard/reference_tools.py
+
+==== SLICE_E_HTTPS_ONLY_GATE_FLIP ====
+PHASE=RED_THEN_GREEN
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r3c_evidence_authenticity_gate.py::test_r3c_reclosure_mutation_plaintext_or_verify_false_is_red tests/test_config_v2.py::test_accepts_http_and_https_schemes -q
+EXIT=0
+SLICE_E=GREEN
+NOTE=flipped plaintext HTTP absolute ban to illegal-scheme/downgrade/insecure-flags/TLS contracts; test_rejects_http_scheme→accepts http|https
+
+==== PRE_F_VERIFICATION ====
+NOTE=fixed topology/historical ledgers for R8 paths + .gitignore/LICENSE; hardened C loopback via URL rewrite to production transport
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r5_topology_gate.py::test_live_workspace_uses_phase_detector_and_classify tests/test_r3c_historical_identity_gate.py::test_r3c_reclosure_identity_is_layered_from_r4_workspace tests/test_r8_http_https_unified.py -q
+EXIT=0
+RESULT=31 passed
+
+==== FULL_NOBUILD_PRE_VERSION ====
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/run_r5_nobuild_pytest.py
+EXIT=0
+RESULT=1686 passed, 3 xfailed
+==== SLICE_F_VERSION_AND_RELEASE ====
+PHASE=VERSION_BUMP_THEN_BUILD
+
+==== SLICE_F_COMPLETE ====
+VERSION=0.4.2
+DUAL_BUILD=BYTE_IDENTICAL
+HISTORICAL_DIST=ZERO_DRIFT
+PLUGIN_ZIP_SHA256=ee11b188db738f713792120ccbc83e1aa4c014a517a095f5f00ae2fe79b981d0
+WHEEL_SHA256=eca18f745132839c596494ee242fe9ecfdf28043da3c52fa4c1f436287157664
+SDIST_SHA256=242b7f751b13e98b33d4007cce24510faa73442fa4fd4f9ea151e796b7e8dc7e
+MANIFEST_SHA256=8a77f456c51d6759e0e49c402e59ef92b28c5053eedca30b505330d773717c82
+CANDIDATE_MANIFEST_SHA256=ca026dc4f76c5703cc6aadbd0aa1bc3d409ffcd9507b8b64743bbeca2ae5a433
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/run_r5_nobuild_pytest.py
+EXIT=0
+RESULT=1699 passed, 3 xfailed, 0 failed
+CMD=CG_NO_BUILD_TRIPWIRE=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/run_r8_042_final_zip_tests.py -q
+EXIT=0
+RESULT=2 passed
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m compileall -q credential_guard tests scripts
+EXIT=0
+CMD=git diff --check
+EXIT=0
+BOUNDARIES=no real targets/credentials/profiles; no Hermes edits; no commit/push; no formal plugin install
+STATUS=R8_0.4.2_TECHNICAL_CANDIDATE_COMPLETE
+
+==== ROUND1_FINAL_REVIEW_BLOCKING_SUPERSEDES ====
+DATE=2026-08-12
+NOTE=First-round dual readonly final reviews both BLOCKING.
+SUPERSEDED=SLICE_D static source mutation test_r8_d_mutation_http_warning_gate_is_load_bearing
+REASON=self-referential gate used message text ("明文 HTTP" in message) as scheme oracle; dropping warning still approved as HTTPS 7-line template — static string assertion was false-green / overturned by final review
+SUPERSEDED_ARTIFACTS=
+  plugin_zip=ee11b188db738f713792120ccbc83e1aa4c014a517a095f5f00ae2fe79b981d0
+  wheel=eca18f745132839c596494ee242fe9ecfdf28043da3c52fa4c1f436287157664
+  sdist=242b7f751b13e98b33d4007cce24510faa73442fa4fd4f9ea151e796b7e8dc7e
+  manifest=8a77f456c51d6759e0e49c402e59ef92b28c5053eedca30b505330d773717c82
+  candidate_manifest_sha256=ca026dc4f76c5703cc6aadbd0aa1bc3d409ffcd9507b8b64743bbeca2ae5a433
+NOTE_SLICE_C=Slice C was NOT an independent RED→GREEN vertical slice. Capability was already delivered by prior A/B tracer bullets; C tests were regression/acceptance confirmation (initial -k r8_c_ EXIT=0 / 4 passed). Honest ledger: C=REGRESSION_ACCEPTANCE, not standalone RED.
+
+==== ROUND2_BLOCKING_A_HTTP_WARNING_GATE ====
+PHASE=RED
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py::test_r8_d_mutation_http_warning_gate_drop_must_block tests/test_r8_http_https_unified.py::test_r8_d_mutation_http_warning_gate_rewrite_must_block tests/test_r8_http_https_unified.py::test_r8_d_mutation_http_warning_gate_shift_must_block tests/test_r8_http_https_unified.py::test_r8_d_http_binding_missing_or_invalid_scheme_fail_closed -q --tb=short -p no:cacheprovider
+EXIT=1
+RESULT=3 failed, 1 passed
+FAILURE_CLASS=security_defect_survives
+FAILED=
+  test_r8_d_mutation_http_warning_gate_drop_must_block (action=approve; expected block)
+  test_r8_d_mutation_http_warning_gate_shift_must_block (action=approve; expected block)
+  test_r8_d_http_binding_missing_or_invalid_scheme_fail_closed (missing scheme approved; expected block)
+PASSED=rewrite already blocked via line-count mismatch under buggy gate
+NOTE=behavioral mutation via monkeypatch _reference_approval_message; real on_pre_tool_call path — not source-string assertion
+
+PHASE=GREEN_IMPLEMENTATION
+PRODUCTION_TOUCHED=credential_guard/approval.py
+FIX=gate reads trusted meta.scheme (and binding type); http requires exact 8 lines + warning once as penultimate; https requires exact 7 lines and forbids HTTP warning; missing/invalid scheme fail-closed; process keeps 7-line template; ban using "明文 HTTP" in message as scheme oracle
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py -k r8_d_ -q --tb=short -p no:cacheprovider
+EXIT=0
+RESULT=6 passed
+BLOCKING_A=GREEN
+
+==== ROUND2_BLOCKING_B_HTTPERROR_DEADLINE ====
+PHASE=RED
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r3a_production_transport.py::test_b2_httperror_slow_body_after_headers_fail_closed_real_loopback tests/test_r3a_production_transport.py::test_b2_httperror_fast_error_body_still_returns_status -q --tb=short -p no:cacheprovider
+EXIT=1
+RESULT=1 failed, 1 passed
+FAILURE_CLASS=security_defect_survives
+FAILED=
+  test_b2_httperror_slow_body_after_headers_fail_closed_real_loopback (DID NOT RAISE HttpAdapterError; returned 503+empty body)
+PASSED=fast 503 still returns real status/body
+NOTE=real loopback HTTPServer + production _default_transport; no fake opener / fake clock
+
+PHASE=GREEN_IMPLEMENTATION
+PRODUCTION_TOUCHED=credential_guard/adapters/http.py
+FIX=HTTPError body-read exceptions (TimeoutError/socket.timeout/OSError/other) raise HttpAdapterError("HTTP_ADAPTER_FAILED") from None; never return body=b""
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r3a_production_transport.py::test_b2_httperror_slow_body_after_headers_fail_closed_real_loopback tests/test_r3a_production_transport.py::test_b2_httperror_fast_error_body_still_returns_status tests/test_r3a_production_transport.py::test_b2_total_deadline_blocks_slow_httperror_body tests/test_r3a_production_transport.py::test_b2_mutation_httperror_body_without_post_deadline_returns_status tests/test_r3a_production_transport.py::test_b2_total_deadline_blocks_slow_body -q --tb=short -p no:cacheprovider
+EXIT=0
+RESULT=5 passed
+BLOCKING_B=GREEN
+
+==== ROUND2_RELATED_AND_FULL ====
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_r8_http_https_unified.py tests/test_r3a_production_transport.py tests/test_r3a_http_binding_schema.py tests/test_r3_http_adapter.py tests/test_reference_approval.py tests/test_injection_toctou.py tests/test_injected_result_guard.py -q --tb=line -p no:cacheprovider
+EXIT=0
+RESULT=146 passed
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/run_r5_nobuild_pytest.py
+EXIT=0
+RESULT=1705 passed, 3 xfailed, 0 failed
+NOTE=topology/historical ledgers minimally registered .r8-round2-blocking-fix-task.md
+CMD=PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m compileall -q credential_guard tests scripts
+EXIT=0
+CMD=git diff --check
+EXIT=0
+
+==== ROUND2_REBUILD_0.4.2 ====
+DUAL_BUILD=BYTE_IDENTICAL
+HISTORICAL_DIST=ZERO_DRIFT
+PLUGIN_ZIP_SHA256=95d96aa82f64701dfc0b5862ba3671feb98b7d5c07a61f350dbe65287fb60ccf
+WHEEL_SHA256=7e514b6c47ea26867674e189df4f23b917d98f932e2832c2b57b4e4426942954
+SDIST_SHA256=97bd5fb3e5ef26efd0964598fedf6f7e3fc751b0bfa3d3c96ff1a425a5ee01d1
+MANIFEST_SHA256=51b4ed98dc244f19e00630c44f32e0c3bfd7c2090e2d979484c4721ac3490752
+CANDIDATE_MANIFEST_SHA256=97280c65d1581af62c15cc3d345dbdcc32c27568cfea236564aefefc70c0b43c
+PLUGIN_ZIP_MEMBERS=35
+BUILD_PYTHON=/Users/yelei/.hermes/hermes-agent/venv/bin/python
+SOURCE_DATE_EPOCH=1704067200
+BOUNDARIES=no real targets/credentials/profiles; no Hermes edits; no commit/push; no formal plugin install
+STATUS=R8_0.4.2_ROUND2_BLOCKING_FIX_TECHNICAL_CANDIDATE
+CMD=CG_NO_BUILD_TRIPWIRE=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/run_r8_042_final_zip_tests.py -q
+EXIT=0
+RESULT=2 passed
+NOTE=EXPECTED_PLUGIN_ZIP_SHA256 retargeted to round2 designated zip; opt-in gate pin updated

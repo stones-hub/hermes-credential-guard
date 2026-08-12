@@ -137,6 +137,7 @@ _STDIN_FIELDS = frozenset(
     }
 )
 _TARGET_FIELDS = frozenset({"scheme", "host", "port"})
+_ALLOWED_HTTP_SCHEMES = frozenset({"http", "https"})
 _REQUEST_REQUIRED_FIELDS = frozenset({"allowed_methods", "allowed_paths"})
 _REQUEST_OPTIONAL_FIELDS = frozenset(
     {
@@ -455,7 +456,8 @@ def _validate_http(
     if not isinstance(target, dict):
         raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
     _require_fields(target, _TARGET_FIELDS)
-    if target["scheme"] != "https":
+    scheme = target["scheme"]
+    if not isinstance(scheme, str) or scheme not in _ALLOWED_HTTP_SCHEMES:
         raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
     host = validate_dns_host(target["host"])
     port = target["port"]
@@ -491,7 +493,7 @@ def _validate_http(
     return {
         "type": "http",
         "credential_ref": entry["credential_ref"],
-        "target": {"scheme": "https", "host": host, "port": port},
+        "target": {"scheme": scheme, "host": host, "port": port},
         "request": request_out,
         "inject": inject_out,
         "approval": "required",

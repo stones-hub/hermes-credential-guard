@@ -753,6 +753,20 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         "tests/test_r7_041_final_zip_optin_gate.py",
         "scripts/run_r7_041_final_zip_e2e.py",
         "scripts/run_r7_041_final_zip_tests.py",
+        # R8 / 0.4.2 HTTP+HTTPS unified support + repo root metadata outside R5 baseline.
+        ".gitignore",
+        "LICENSE",
+        ".r8-http-support-task.md",
+        ".r8-http-tdd-evidence.log",
+        ".r8-round2-blocking-fix-task.md",
+        "docs/R8-0.4.2-HTTP与HTTPS统一凭证请求方案.md",
+        "tests/test_r8_http_https_unified.py",
+        # R8 release 0.4.2 (non-dist paths only; dist/ members skipped by enumerator).
+        "docs/R8-0.4.2-验收报告.md",
+        "tests/r8_042_final_zip_e2e.py",
+        "tests/test_r8_042_final_zip_optin_gate.py",
+        "scripts/run_r8_042_final_zip_e2e.py",
+        "scripts/run_r8_042_final_zip_tests.py",
         # scripts/run_final_zip_encoding_canary.py is baseline-era (modified only);
         # it stays out of this delta and is declared in R5_MODIFIED_PATHS.
     }

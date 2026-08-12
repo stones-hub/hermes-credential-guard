@@ -150,7 +150,18 @@ def _freeze_binding_meta(bindings: Mapping[str, Any]) -> Mapping[str, Any]:
             out["reference_arg_path"] = HTTP_REFERENCE_ARG_PATH
             out["allowed_tools"] = (HTTP_REFERENCE_TOOL,)
             loc = inj.get("location") or inj.get("header_name") or ""
-            out["operation_summary"] = f"https:{inj.get('type')}:{loc}"
+            raw_target = entry.get("target")
+            # Safe scheme only — never host/port in scrubbed approval meta.
+            scheme = (
+                raw_target.get("scheme")
+                if isinstance(raw_target, Mapping)
+                else None
+            )
+            if scheme in {"http", "https"}:
+                out["scheme"] = scheme
+            else:
+                scheme = "https"
+            out["operation_summary"] = f"{scheme}:{inj.get('type')}:{loc}"
             req = entry.get("request")
             if isinstance(req, Mapping):
                 methods = req.get("allowed_methods") or ()
@@ -172,6 +183,7 @@ def _freeze_binding_meta(bindings: Mapping[str, Any]) -> Mapping[str, Any]:
             "inject_type": out.get("inject_type"),
             "inject_header_name": out.get("inject_header_name"),
             "inject_mode": out.get("inject_mode"),
+            "scheme": out.get("scheme"),
             "allowed_methods": list(out.get("allowed_methods") or ()),
             "allowed_paths": list(out.get("allowed_paths") or ()),
             "connect_timeout_seconds": out.get("connect_timeout_seconds"),

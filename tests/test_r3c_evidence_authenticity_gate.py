@@ -265,13 +265,28 @@ def _missing_evidence_contracts(text: str, kind: str) -> List[str]:
             missing.append("hardcoded:http_target_hits_assign_1")
         if "verify=False" in text or "verify = False" in text:
             missing.append("forbidden:tls_verify_disabled")
-        if re.search(r"""['"]scheme['"]\s*:\s*['"]http['"]""", text) and "https" not in text:
-            missing.append("forbidden:plaintext_http_scheme")
-        # Binding scheme must stay https; reject http-only loopback target URLs.
-        if re.search(r"""url\s*=\s*f?['"]http://127\.0\.0\.1""", text):
-            missing.append("forbidden:plaintext_loopback_url")
+        # R8: binding may select http|https. Illegal schemes stay forbidden.
+        # Absolute ban on plaintext http is retired; keep TLS/proxy/redirect contracts.
+        if re.search(
+            r"""['"]scheme['"]\s*:\s*['"](?:ftp|file|ws|HTTP|HTTPS)['"]""",
+            text,
+        ):
+            missing.append("forbidden:illegal_scheme")
+        if (
+            'replace("https://", "http://")' in text
+            or "replace('https://', 'http://')" in text
+        ):
+            missing.append("forbidden:https_to_http_downgrade")
+        if "trust_env=True" in text or "allow_redirects=True" in text:
+            missing.append("forbidden:insecure_transport_flags")
+        # R3C historical wire remains HTTPS-bearing; require synthetic/loopback TLS target.
         if "https://svc.example.test" not in text and "https://127.0.0.1" not in text:
             missing.append("missing:https_loopback_or_synthetic_target")
+        # Production HTTPS TLS markers must remain load-bearing on the wire corpus.
+        if "create_default_context" not in text:
+            missing.append("missing:tls_default_context")
+        if "_default_transport" not in text:
+            missing.append("missing:_default_transport")
     if kind == "probe_graph":
         if re.search(r"""['"]identity_unchanged['"]\s*:\s*True\b""", text):
             missing.append("hardcoded:identity_unchanged_True")
@@ -1623,16 +1638,47 @@ def test_r3c_reclosure_mutation_forge_target_hits_without_default_transport_is_r
 
 
 def test_r3c_reclosure_mutation_plaintext_or_verify_false_is_red():
-    """Mutation 3: plaintext HTTP loopback URL assign or verify=False → RED."""
+    """Mutation 3 (R8): verify=False / insecure flags / illegal scheme / downgrade → RED.
+
+    Absolute plaintext-http ban is retired; binding-selected http is covered by R8 tests.
+    """
     wire = _wire_carrier()
-    m1 = wire + '\nurl = "http://127.0.0.1:9/v1"\n'
+    assert validate_r3c_evidence_source(wire, "wire_script") == []
+
+    m1 = wire + "\nverify=False\n"
     v1 = validate_r3c_evidence_source(m1, "wire_script")
     assert v1
-    assert any("plaintext" in x for x in v1)
-    m2 = wire + "\nverify=False\n"
+    assert any("tls_verify" in x or "verify" in x for x in v1)
+
+    m2 = wire + "\nallow_redirects=True\n"
     v2 = validate_r3c_evidence_source(m2, "wire_script")
     assert v2
-    assert any("tls_verify" in x or "verify" in x for x in v2)
+    assert any("insecure_transport" in x for x in v2)
+
+    m3 = wire + "\ntrust_env=True\n"
+    v3 = validate_r3c_evidence_source(m3, "wire_script")
+    assert v3
+    assert any("insecure_transport" in x for x in v3)
+
+    m4 = wire + '\n_bad = {"scheme": "ftp"}\n'
+    v4 = validate_r3c_evidence_source(m4, "wire_script")
+    assert v4
+    assert any("illegal_scheme" in x for x in v4)
+
+    m5 = wire + '\nurl = url.replace("https://", "http://")\n'
+    v5 = validate_r3c_evidence_source(m5, "wire_script")
+    assert v5
+    assert any("downgrade" in x for x in v5)
+
+    # Production gate section ends before the first test_ function.
+    gate_body = Path(REPO / "tests" / "test_r3c_evidence_authenticity_gate.py").read_text(
+        encoding="utf-8"
+    ).split("\ndef test_", 1)[0]
+    assert "forbidden:plaintext_http_scheme" not in gate_body
+    assert "forbidden:plaintext_loopback_url" not in gate_body
+    assert "forbidden:illegal_scheme" in gate_body
+    assert "forbidden:https_to_http_downgrade" in gate_body
+    assert "forbidden:insecure_transport_flags" in gate_body
 
 
 def test_r3c_reclosure_mutation_hardcoded_target_hits_is_red():

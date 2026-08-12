@@ -1,8 +1,8 @@
 """Real landed-artifact composition audit (no release build).
 
 Opens wheel / sdist / plugin ZIP already landed under ``dist/`` and checks
-member presence / absence. Historical 0.3.1 and 0.4.0 bytes stay frozen;
-current ``PLUGIN_VERSION`` (0.4.1+) is audited separately and must coexist.
+member presence / absence. Historical 0.3.1 / 0.4.0 / 0.4.1 bytes stay frozen;
+current ``PLUGIN_VERSION`` (0.4.2+) is audited separately and must coexist.
 
 Mutations M-1 / M-2 operate on *copies* of the current plugin ZIP only.
 """
@@ -70,6 +70,22 @@ _HISTORICAL_040 = {
     ),
 }
 
+# 0.4.1 historical freeze — must coexist with 0.4.2; never overwrite.
+_HISTORICAL_041 = {
+    "artifact-manifest-0.4.1.json": (
+        "55b3bc87b9ac9311097e4661fcd0d5ccbef1084e02bdb1764b42201a91082358"
+    ),
+    "credential-guard-0.4.1-hermes-plugin.zip": (
+        "3bee46a83c45579faae693d8dd4f681d9128373014e36069eaabadbd1677d16c"
+    ),
+    "hermes_credential_guard-0.4.1-py3-none-any.whl": (
+        "df0f783ae1c8a2698e672bf0b4d54943cb3e48033a206c9d6649d9de3369de20"
+    ),
+    "hermes_credential_guard-0.4.1.tar.gz": (
+        "27e67907ecf13e8be5018206bdc54241e5196bc2eee0c149ce62192f18f65020"
+    ),
+}
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -95,6 +111,13 @@ def test_historical_040_four_files_still_byte_frozen():
         path = DIST / name
         assert path.is_file(), name
         assert _sha256(path) == digest, f"{name} drifted from 0.4.0 freeze"
+
+
+def test_historical_041_four_files_still_byte_frozen():
+    for name, digest in _HISTORICAL_041.items():
+        path = DIST / name
+        assert path.is_file(), name
+        assert _sha256(path) == digest, f"{name} drifted from 0.4.1 freeze"
 
 
 def test_landed_current_artifacts_exist_and_match_versioned_manifest():
@@ -133,6 +156,7 @@ def test_dist_has_historical_and_current_release_files():
     expected = sorted(
         set(_HISTORICAL_031)
         | set(_HISTORICAL_040)
+        | set(_HISTORICAL_041)
         | {
             WHEEL_FILENAME,
             SDIST_FILENAME,
@@ -141,7 +165,7 @@ def test_dist_has_historical_and_current_release_files():
         }
     )
     assert names == expected
-    assert len(expected) == 12
+    assert len(expected) == 16
 
 
 def test_plugin_zip_composition_clean_and_complete():

@@ -148,17 +148,22 @@ def safe_inject_summary(meta: Optional[Mapping[str, Any]], binding_type: str = "
     """Human-safe inject description — no host, header values, or secrets."""
     btype = ""
     inj = None
+    scheme = ""
     if isinstance(meta, Mapping):
         btype = str(meta.get("type") or binding_type or "")
         inj = meta.get("inject_type")
+        raw_scheme = meta.get("scheme")
+        if isinstance(raw_scheme, str) and raw_scheme in {"http", "https"}:
+            scheme = raw_scheme
     else:
         btype = str(binding_type or "")
     if btype == "http":
+        label = "HTTPS" if scheme != "http" else "HTTP"
         if inj == "bearer":
-            return "HTTPS Authorization Header"
+            return f"{label} Authorization Header"
         if inj == "api_key_header":
-            return "HTTPS API Key Header"
-        return "HTTPS Header"
+            return f"{label} API Key Header"
+        return f"{label} Header"
     if btype == "process_env":
         return "fixed local program (env)"
     if btype == "stdin":
