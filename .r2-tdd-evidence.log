@@ -1,0 +1,600 @@
+# R2 TDD evidence log
+# Records: command, test name, exit code, failure summary only.
+# No fixture secrets, path bodies, or exception stacks.
+
+## A0 RED — 2026-08-03
+
+command: HERMES_AGENT_ROOT=/tmp/credential-guard-r2-hermes-source HERMES_SPIKE_PYTHON=/tmp/credential-guard-r2-hermes-venv/bin/python .venv/bin/python -m pytest tests/test_r2_approval_posture.py -q -p no:cacheprovider
+exit_code: 1
+summary: 10 failed — RED: spikes/r2-approval-posture-proof/run_proof.py missing
+
+## A0 GREEN — 2026-08-03
+
+command: HERMES_AGENT_ROOT=/tmp/credential-guard-r2-hermes-source HERMES_SPIKE_PYTHON=/tmp/credential-guard-r2-hermes-venv/bin/python .venv/bin/python -m pytest tests/test_r2_approval_posture.py -q -p no:cacheprovider
+exit_code: 0
+summary: 10 passed — bypass (process/session/off), smart≠manual, unknown/import fail-closed, no direct config.yaml read, order approve/deny, TTL=timeout+60
+notes: approval timeout via load_config_readonly + cross-check _get_approval_timeout (private; compatibility risk flagged); EXECUTION_REVIEW_MARGIN_SECONDS=60; plan_ttl=360 when timeout=300
+
+## A1.1 RED — no-reference
+command: .venv/bin/python -m pytest tests/test_credential_references.py::test_01_no_reference_returns_empty_and_deepcopy_equivalent -q -p no:cacheprovider
+exit_code: 4
+summary: ModuleNotFoundError: credential_guard.references
+
+## A1.1 GREEN — no-reference
+command: .venv/bin/python -m pytest tests/test_credential_references.py::test_01_no_reference_returns_empty_and_deepcopy_equivalent -q -p no:cacheprovider
+exit_code: 0
+summary: 1 passed
+
+## A1 FULL GREEN — references contract
+command: .venv/bin/python -m pytest tests/test_credential_references.py -q -p no:cacheprovider
+exit_code: 0
+summary: 9 passed — no-ref, legal ref, arg path, NAME_RE/registered, malformed variants, multi-ref, key/bytes, residue, no restore API
+
+## R2B RED — injection_plan missing
+command: .venv/bin/python -m pytest tests/test_injection_plan.py -q -p no:cacheprovider
+exit_code: 4
+summary: ModuleNotFoundError: credential_guard.injection_plan
+
+## R2B GREEN — injection_plan
+command: .venv/bin/python -m pytest tests/test_injection_plan.py -q -p no:cacheprovider
+exit_code: 0
+summary: 17 passed — canonical digest, frozen plan, nonce≥128bit, state machine, concurrent consume, TTL=360, capacity=8×4=32, cleanup, no secret in repr
+
+## R2C RED — tool_request missing
+command: .venv/bin/python -m pytest tests/test_tool_request_analysis.py -q -p no:cacheprovider
+exit_code: 4
+summary: ModuleNotFoundError: credential_guard.tool_request
+
+## R2C GREEN — tool_request + runtime metadata
+command: .venv/bin/python -m pytest tests/test_tool_request_analysis.py tests/test_runtime_config_v2.py tests/test_plugin_registration.py -q -p no:cacheprovider
+exit_code: 0
+summary: 64 passed
+
+## R2D GREEN — approval + tool_execution + toctou
+command: .venv/bin/python -m pytest tests/test_reference_approval.py tests/test_injection_toctou.py tests/test_approval_gate.py tests/test_plugin_registration.py -q -p no:cacheprovider
+exit_code: 0
+summary: 40 passed
+
+## R2E GREEN — e2e
+command: HERMES_AGENT_ROOT=... HERMES_SPIKE_PYTHON=... .venv/bin/python -m pytest tests/test_r2_e2e.py -q -p no:cacheprovider
+exit_code: 0
+summary: 9 passed
+
+## Final regression §8
+r2 posture+refs: 19 passed
+injection_plan: 17 passed
+tool_request+runtime+reg: 64 passed
+approval+toctou+gate: 24 passed
+r2_e2e: 9 passed
+config v2/migration/profile: 175 passed
+compileall: 0
+full pytest: see below
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-artifact hash drift]
+ERROR tests/test_reproducible_release.py::test_l2_duplicate_filenames_red - P...
+ERROR tests/test_reproducible_release.py::test_l2_deps_drift_red - Permission...
+ERROR tests/test_reproducible_release.py::test_l2_standard_filenames_match_builder_constants
+18 failed, 716 passed, 2 xfailed, 83 errors in 15.72s
+
+## Full pytest note
+exit: environmental — tests that touch /Users/yelei/.hermes raise PermissionError under coding-agent constraint; R0 spike / hermes_cli_e2e / plugin_load / release L2 ERROR/FAIL accordingly.
+R2+R1 specialty/regression subset: re-run below.
+
+## Final R2+R1 subset
+command: pytest R2 specialty + runtime + registration + approval + config v2/migration/profile
+exit_code: 0
+summary: 308 passed
+execute_code_sensitive_paths alone: 57 passed
+compileall: 0
+
+## 主代理独立验收修正 — 2026-08-03
+
+### P6 RED — pre-approval secret field access
+command: .venv/bin/python -m pytest tests/test_tool_request_analysis.py::test_p6_* tests/test_reference_approval.py::test_p6_* -q -p no:cacheprovider
+exit_code: 1
+summary: 4 failed — tool_request/pre/tool_execution called ensure_published_from_disk → build_file_egress_registry → value access
+
+### P6 GREEN — metadata-only loader
+command: same + R2 specialty
+exit_code: 0
+summary: added credential_guard/runtime_metadata.py; tool_request/approval/tool_execution use load_runtime_metadata only; 45+ R2 tests green
+
+### P1 — live secret_resolve_count
+command: HERMES_AGENT_ROOT=... HERMES_SPIKE_PYTHON=... .venv/bin/python -m pytest tests/test_r2_e2e.py -q -p no:cacheprovider
+exit_code: 0
+summary: 10 passed — note_execution_secret_resolve seam; E2E reads get_execution_secret_resolve_count(); removed hardcoded 0; mutation test asserts no literal assign
+
+### P5 — generation observational only
+command: .venv/bin/python -m pytest tests/test_injection_plan.py tests/test_injection_toctou.py -q -p no:cacheprovider
+exit_code: 0
+summary: removed runtime_generation from InjectionPlan; egress generation bump does not break R2 consume; security binds file identity + metadata digest
+
+### P3 — R0 manifest assertion update
+command: .venv/bin/python -m pytest tests/test_tool_injection_foundation.py::test_r0_host_surfaces_unchanged_paths -q -p no:cacheprovider
+exit_code: 0
+summary: production plugin.yaml must contain tool_request+tool_execution; version remains 0.3.1; R0 spike identity distinct
+
+### P4 — registry isolation
+command: .venv/bin/python -m pytest tests/test_plugin_registration.py tests/test_execute_code_sensitive_paths.py -q -p no:cacheprovider
+exit_code: 0
+summary: 75 passed — autouse registry restore; order combination no longer polluted
+
+### P2 — fake_provider claim removed + R1B wire regression
+command: .venv/bin/python -m pytest tests/test_r2_e2e.py tests/test_runtime_config_v2.py tests/test_file_registry_bridge.py tests/test_middleware_http_integration.py tests/test_request_guard.py -q -p no:cacheprovider
+exit_code: 0
+summary: R2 E2E fake_provider=False, provider_wire_deferred_to=R1B; R1B wire subset 56 passed
+
+### Combined specialty after fix
+command: pytest R2 specialty + R1B wire + plugin_registration + execute_code + r0 manifest
+exit_code: 0
+summary: 223 passed; compileall exit 0
+notes: config_digest in R2 plan is metadata-only; secret rotation via config_file_identity; no secret-aware digest claim on pre-approval path
+
+## Round2 P6-false-green — RED published-snapshot — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_r2_published_snapshot.py -q -p no:cacheprovider --tb=line
+exit_code: 1
+summary: 11 failed, 1 passed — metadata-only path still calls runtime_metadata._open_and_read; module not deleted; missing turn_id still creates plan; TTL ignores Hermes fail-closed; unpublished ref self-loads config
+notes: prior P6 "metadata-only parser" GREEN overturned by exploding seam on bound _open_and_read/os.open; cross-turn already INVALIDATED (1 passed)
+
+## Round2 published-snapshot — GREEN — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_r2_published_snapshot.py -q -p no:cacheprovider
+exit_code: 0
+summary: 12 passed — get_runtime_view + lstat only; runtime_metadata deleted; race INVALIDATED; turn+TTL fail-closed
+
+### E2E
+command: HERMES_AGENT_ROOT=... HERMES_SPIKE_PYTHON=... .venv/bin/python -m pytest tests/test_r2_e2e.py -q -p no:cacheprovider
+exit_code: 0
+summary: 10 passed — R1B publish first; secret_resolve_delta_during_r2=0; config_body_read_hits=[]; lstat>=1; provider_wire deferred to R1B
+
+### Specialty + R1 regression
+command: pytest R2 specialty + runtime_config_v2 + plugin_registration + execute_code + file_registry + middleware + request_guard + migration
+exit_code: 0
+summary: 316 passed
+R1A config_v2/migration/profile + R0 manifest: 176 passed
+compileall: 0
+
+notes: removed runtime_metadata.py; execution_recheck_lock closes lstat→consume race; resolve_plan_ttl_seconds fail-closed; generation observational only across code/tests/docs
+
+## Round2 final gate — 2026-08-03
+
+command: pytest R2 specialty + R1B wire/runtime + plugin + execute_code + R1A config/migration/profile + R0 manifest
+exit_code: 0
+summary: 411 passed; runtime_metadata deleted; compileall 0
+notes: full pytest still hits PermissionError on /Users/yelei/.hermes (coding-agent constraint); not R2 logic regression. sensitive_paths parent-of-ssh env flake unrelated to R2.
+
+## Round3 http_credential_request — RED — 2026-08-03
+
+command: HERMES_AGENT_ROOT=/tmp/credential-guard-r2-hermes-source .venv/bin/python -m pytest tests/test_http_reference_tool.py tests/test_reference_approval.py::test_d1_valid_plan_pending_and_approve tests/test_reference_approval.py::test_d1_approval_summary_blocks_when_args_mutated tests/test_injection_plan.py::test_resolve_plan_ttl_ceils_fractional_timeout tests/test_injection_plan.py::test_resolve_plan_ttl_rejects_non_finite_and_oversize -q --tb=line
+exit_code: 1
+summary: 21 failed, 2 errors — ModuleNotFoundError: credential_guard.reference_tools; approval message still shows https:bearer:authorization_header not POST /path; TTL int() truncates 300.1→360; MAX_APPROVAL_TIMEOUT_SECONDS missing; Hermes 3.9 TypeError on union syntax for in-process PluginManager
+evidence: /tmp/cg-r2-red/red-core.txt
+
+## Round3 http_credential_request — GREEN — 2026-08-03
+
+command: HERMES_AGENT_ROOT=... HERMES_SPIKE_PYTHON=... .venv/bin/python -m pytest tests/test_http_reference_tool.py tests/test_plugin_registration.py tests/test_reference_approval.py::test_d1_valid_plan_pending_and_approve tests/test_reference_approval.py::test_d1_approval_summary_blocks_when_args_mutated tests/test_injection_plan.py::test_resolve_plan_ttl_* -q
+exit_code: 0
+summary: 41 passed — formal register http_credential_request; schema additionalProperties=false; handler RUNTIME_ADAPTER_NOT_READY; Hermes spike-python registry dispatch deny/approve order; digest-bound POST /job/... approval; ceil TTL + MAX 86400 fail-closed
+
+### E2E
+command: HERMES_AGENT_ROOT=... HERMES_SPIKE_PYTHON=... .venv/bin/python -m pytest tests/test_r2_e2e.py tests/test_http_reference_tool.py -q
+exit_code: 0
+summary: 29 passed — register()+registry handle_function_call; approval_shows_method_path; deny/approve/mutate/replay/non-manual/plain counts preserved
+## Round3 specialty gate — 2026-08-03
+command: pytest http_reference + r2 e2e/specialty + registration + mysql/ssh/approval
+exit_code: 0
+summary: 189 passed; compileall 0
+full_pytest: 761 passed, 2 xfailed; remaining failures/errors = PermissionError on /Users/yelei/.hermes (coding-agent constraint)
+notes: formal http_credential_request registered; digest-bound approval method/path; TTL ceil+86400; E2E via register()+handle_function_call
+
+### Candidate core SHA-256
+e77dabc31fdc340b7773a1eb798a6e46f15dac5d2942fbd33cff7898c24a671e  credential_guard/reference_tools.py
+8bc4ce5e7254a6e5c99f1f5aa949e31f7c881361ce6d7289b7763781a88d46c4  credential_guard/__init__.py
+4c02b24eaaf6775d1637e16ca7b63f337cb2d43f5306286114d1e612700fd516  credential_guard/approval.py
+9845832d5652453899c946923bf37328d031f9880b59906898bc6caa1cf048f2  credential_guard/injection_plan.py
+d2734d805517ae7c9a02977f156694ea71d2a405df96aa8bd04af808fc9c7a33  credential_guard/cli.py
+23900b98b2cbb59db4f5c85897dd7f01c529998c6c70abbdabc0bb4eca46db5b  plugin.yaml
+e231790f6d2e1882b1491ab00db1dfa72531a1868517311ee65335a82884c5ad  scripts/run_r2_e2e.py
+
+## Round3 post-review narrow fix — 2026-08-03
+summary: reject U+2028/U+2029/C1 in path; scrub no longer false-positive on /reset-password; scrub/line-count fail invalidate
+tests: 67 passed (http_reference + reference_approval + r2_e2e + ttl + plugin_registration)
+9805bc89a521bd826e4833cd53a895901a082e77a379a975ad1ca112d6a3c212  credential_guard/reference_tools.py
+486981af96388e2403d50619cdd8feb61171250c9d4fc53d0266ff577c0df17e  credential_guard/approval.py
+
+## Round4 package-scan DELETE false-positive — RED — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_production_package_scan.py::test_ast_scan_* tests/test_production_package_scan.py::test_reference_tools_* -q -p no:cacheprovider
+exit_code: 1
+summary: 13 failed — NotImplementedError TDD RED stub in tests/support/ddl_dml_ast_scan.py
+trigger: main-agent full pytest 1 failed (864 passed, 2 xfailed) — historical _DDL_DML_RE matched HTTP method "DELETE" in reference_tools.py
+evidence: /tmp/r2-pkg-scan-red.txt
+
+## Round4 package-scan AST semantic — GREEN — 2026-08-03
+
+command: CREDENTIAL_GUARD_BUILD_PYTHON=<codex-runtime-python> .venv/bin/python -m pytest tests/test_production_package_scan.py -k 'not plugin_zip_hard and not plugin_zip_plugin_manager and not plugin_artifact_missing' -q
+exit_code: 0
+summary: 15 passed — bare "DELETE" clean; seven real SQL shapes hit; foldable "DELETE "+"FROM t" hit; dynamic verb+rest boundary documented; reference_tools production clean; temp inject "DELETE FROM x" red; wheel/sdist/plugin ZIP unpack scan green
+notes: did NOT modify reference_tools.py HTTP enum; formal dist/ untouched; no ~/.hermes or .ssh access
+
+### R2 specialty
+command: HERMES_AGENT_ROOT=/tmp/credential-guard-r2-hermes-source pytest http_reference + r2 e2e/posture/refs/plan/tool_request/approval/toctou/snapshot + registration + approval_gate
+exit_code: 0
+summary: 149 passed; compileall 0
+
+### Full pytest (coding-agent sandbox)
+exit: 20 failed, 858 passed, 2 xfailed
+notes: failures are PermissionError on /Users/yelei/.hermes (coding-agent constraint) plus pre-existing sensitive_paths parent-of-ssh flake; test_real_wheel_and_sdist_and_plugin_zip_scan green under CREDENTIAL_GUARD_BUILD_PYTHON; main-agent environment previously had only the DELETE false-positive as the unique logic failure
+
+### Candidate identity (post-fix freeze)
+candidate_manifest_sha256: 9555d60b29f1ece51733ee136e9010341456dad6736c7f908ce6adc6b39d05ea
+3e98417c993ba7ef9043c3cf5ba9366c2cec240b3944e8f42e51eb14aa62b5fa  tests/support/ddl_dml_ast_scan.py
+48c36c6e252bf344720267f0651a56f160b6b1948afab79811bb3add04b4ceaa  tests/test_production_package_scan.py
+9805bc89a521bd826e4833cd53a895901a082e77a379a975ad1ca112d6a3c212  credential_guard/reference_tools.py  # unchanged vs Round3
+
+## Round4 post-review narrow fix — f-string/bytes/multiline — 2026-08-03
+
+RED: 3 failed — f"UPDATE {t} SET", b"DELETE FROM t", "--\\nDELETE FROM t" missed
+GREEN: FormattedValue sentinel "x"; bytes utf-8/latin-1 decode; (?m) line-anchored SQL shape
+mutation+reference_tools: 16 passed; wheel/sdist/plugin ZIP scan: 1 passed
+reference_tools.py unchanged: 9805bc89a521bd826e4833cd53a895901a082e77a379a975ad1ca112d6a3c212
+
+### Round4 freeze (post-review)
+candidate_manifest_sha256: 9555d60b29f1ece51733ee136e9010341456dad6736c7f908ce6adc6b39d05ea
+123f5721d0a20860f68193dbbd665608162d78e986b0a5abf09d45c88710d36d  tests/support/ddl_dml_ast_scan.py
+963a865a5a6cc28157e666292896df01aab0730f0818c0cfe438b249dc558c90  tests/test_production_package_scan.py
+9805bc89a521bd826e4833cd53a895901a082e77a379a975ad1ca112d6a3c212  credential_guard/reference_tools.py
+http_reference+r2_e2e+registration reconfirm: 49 passed
+
+## Round5 config-lock race — A RED — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_config_lock_race.py::test_a_exclusive_writer_blocked_until_consume_shared_section_ends -q -p no:cacheprovider
+exit_code: 2
+summary: ERROR collection — ModuleNotFoundError: credential_guard.config_lock
+evidence: /tmp/r2-config-lock-a-red.txt
+notes: positive consume-window race + negative unlocked-writer control authored; production shared/exclusive protocol absent
+
+## Round5 config-lock race — A–E RED — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_config_lock_race.py::test_a_exclusive_writer_blocked_until_consume_shared_section_ends -q -p no:cacheprovider
+exit_code: 2
+summary: ERROR collection — ModuleNotFoundError: credential_guard.config_lock
+evidence: /tmp/r2-config-lock-a-red.txt
+notes: positive consume-window + negative unlocked-writer control + publish/writer + flock safety + plain-tool + sensitive path tests authored before production helper
+
+## Round5 config-lock race — GREEN — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_config_lock_race.py -q -p no:cacheprovider
+exit_code: 0
+summary: 15 passed — shared covers load/build/publish + final lstat→consume; exclusive writer blocked in window; plan CONSUMED (serialized, not INVALIDATED); two-process flock mutex; timeout/symlink/mode/reentrant fail-closed; mutation RED controls without shared/exclusive; plain tool no lock/no config; short-write loop fix post-review
+
+### Specialty / regression
+R2 specialty (lock+snapshot+toctou+approval+plan+http+e2e+registration+gate): 164 passed
+R1A/R1B (runtime_v2+migration+profile+execute_code): 196 passed
+package AST scan subset: 85 passed (1 error = PermissionError ~/.hermes build python; coding-agent constraint)
+compileall: 0
+full pytest: 799 passed, 2 xfailed; remaining failed/errors = PermissionError on /Users/yelei/.hermes + pre-existing sensitive_paths parent-of-ssh flake; not this round's logic regression
+
+### tool_call_id overwrite lead (classify only)
+put() overwrites same (session_id, tool_call_id); create_analyzed_plan always mints new ≥128-bit nonce; _reference_rule_key binds nonce → new rule_key; Hermes session/always cannot reuse prior approval. NOT a BLOCKING finding; no code change.
+
+### Threat model statement
+Protocol protects cooperative Credential Guard publish/write/consume only. Does NOT claim protection against malicious same-UID syscall bypass.
+
+### Freeze (relative_path:sha256:size\\n) — stable across two computations
+【历史误标，作废】下列 candidate_manifest_sha256 曾误标为 path:sha256:size 算法；真实 candidate 算法为 relative_path:sha256\\n（不含 size）。数值保留作历史快照。
+round5_lock_manifest_sha256: 890e4fd0a1256be4db1aa7d0322ca130774471f1b39ca09cbfb558494956a07d
+candidate_manifest_sha256: 3d8ee3d01d97abae2ffd5bbf6604881b82fc74a3877817d6a711515a03319902
+credential_guard/config_lock.py:cd2ff825e16f52c22e885e675bd09135a74b475ab7402e4ac11704aca531be00:10492
+credential_guard/runtime_config.py:61c6fb78879efe2c62e043a01920e62dd438b2b150622ea5e61125bcb06ed2bc:14860
+credential_guard/tool_execution.py:4074e9136ae0abd10cb7aab10d6cba83eb31dba22a56446db3a464cdf517fa73:8910
+credential_guard/migration.py:91741713a967e5e799589038f24cf145603d68c1102398abe0e92deb7698792f:76930
+credential_guard/sensitive_paths.py:0cdb5f58c5b73e7a06cdc0508898731578e12afadf9579963fca67bb9f38d46b:37423
+
+### Two-path read-only review
+Reviewer1: P2 short-write → fixed (loop os.write); cooperative race closed
+Reviewer2: No findings; tool_call_id overwrite non-blocker; writers inventory = migration + exclusive helper only
+
+## Round5b config-lock timeout bounds — RED — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_config_lock_race.py -k test_e_ -q -p no:cacheprovider
+exit_code: 2
+summary: ERROR collection — ImportError: cannot import name MAX_LOCK_TIMEOUT_SECONDS
+evidence: /tmp/r2-config-lock-timeout-red.txt
+notes: public APIs accept bool/NaN/Inf/0/negative/unbounded timeout; no pre-acquire validation before lock open
+
+## Round5b config-lock timeout bounds — GREEN — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_config_lock_race.py -k test_e_ -q -p no:cacheprovider
+exit_code: 0
+summary: 52 passed — bool/None/str/NaN/Inf/0/neg/over_max rejected as CONFIG_LOCK_TIMEOUT before lock create or formal config write; small positive/default/max accepted on shared/exclusive/atomic_replace
+evidence: /tmp/r2-config-lock-timeout-green.txt
+
+### Specialty / regression
+config lock all: 67 passed
+R2 specialty (lock+snapshot+toctou+approval+plan+http+e2e+registration+gate+tool_request+posture): 207 passed
+compileall credential_guard: exit 0 (28 modules)
+full pytest (coding-agent sandbox): 851 passed, 2 xfailed; remaining failed/errors = PermissionError on /Users/yelei/.hermes + sensitive_paths parent-of-ssh flake + hermes/build-dependent cases; not this round logic regression
+logic subset (exclude hermes/build/ssh sandbox-touching): 733 passed, 2 xfailed, 0 failed
+
+### Contract
+MAX_LOCK_TIMEOUT_SECONDS=300; type exactly int/float (reject bool); math.isfinite; 0 < value <= max; validate before lock-file/config side effects
+Threat model unchanged: cooperative Credential Guard publish/write/consume only
+
+### Freeze (relative_path:sha256:size
+) — stable across two computations
+【历史误标，作废】下列 candidate_manifest_sha256 曾误标为 path:sha256:size 算法；真实 candidate 算法为 relative_path:sha256\\n（不含 size）。数值保留作历史快照。正确口径见 Round6 / 报告 §13。
+round5b_timeout_changed_manifest_sha256: 00a9090796d3424f82fd47c20af8819050e0e3a9d2b4b9e6fee06ffdab5772da
+candidate_manifest_sha256: 16581bb6cff33011e43b8915b49a394329e74ab4732623acad8ef1471b784984
+credential_guard/config_lock.py:e56fab034783d6e515fe96420ee73965506f57ef7862f060a45b5a2da8c1e1f6:11891
+tests/test_config_lock_race.py:4be1f9fb95f4cfa5b4343748082276bd277cd4b91d1d3bdb714b4a0d0acb0e88:28258
+
+## Round6 plan-key insert-only + tombstone — STORE RED — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_injection_plan.py -k 'test_r2_' -q -p no:cacheprovider
+exit_code: 1
+summary: 8 failed, 1 passed (different tool_call_ids already independent) — put still overwrites; no PLAN_KEY_REUSED; cleanup frees terminal immediately; no reset_for_tests
+evidence: /tmp/r2-plan-key-store-red.txt
+notes: absolute prohibition respected — no ~/.hermes or .ssh access
+
+## Round6 plan-key insert-only + tombstone — STORE GREEN — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_injection_plan.py -k 'test_r2_' -q -p no:cacheprovider
+exit_code: 0
+summary: 9 passed — PLAN_KEY_REUSED on ANALYZED/PENDING/CONSUMED/INVALIDATED; create fails without pollute; expired tombstone until expires+60; concurrent exactly-one; capacity counts tombstones; reset_for_tests; different tool_call_ids independent
+evidence: /tmp/r2-plan-key-store-green.txt
+notes: test_14 updated for tombstone deadline semantics; full injection_plan suite below
+
+## Round6 plan-key insert-only + tombstone — STORE GREEN — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_injection_plan.py -q -p no:cacheprovider
+exit_code: 0
+summary: 31 passed — PLAN_KEY_REUSED; tombstone until expires+60; concurrent exactly-one; capacity counts tombstones; reset_for_tests; test_14 tombstone semantics
+evidence: /tmp/r2-plan-key-store-green.txt /tmp/r2-plan-key-store-full.txt
+
+## Round6 plan-key attack — RED under overwrite mutation — 2026-08-03
+
+command: temporary InjectionPlanStore.put overwrite + pytest test_attack_same_key* test_attack_b_different*
+exit_code: 1
+summary: 2 failed — B becomes analyzed (substitutes A) when put overwrites
+evidence: /tmp/r2-plan-key-attack-red.txt
+
+## Round6 plan-key attack — GREEN — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_plan_key_reuse_attack.py -q -p no:cacheprovider
+exit_code: 0
+summary: 4 passed — B create_failed; A nonce/rule_key preserved; downstream=0; mutation proves old overwrite consumes B; different tool_call_ids independent
+evidence: /tmp/r2-plan-key-attack-green.txt
+notes: approval.py / tool_execution.py untouched
+
+## Round6 manifest algorithm labels — GREEN — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_r2_report_manifest_labels.py -q -p no:cacheprovider
+exit_code: 0
+summary: 4 passed — candidate=path:sha256 (no size) via release_identity; review=path:sha256:size; §13 live digests; historical mislabels voided not deleted
+evidence: /tmp/r2-manifest-labels-green.txt
+
+### Round6 freeze (dual algorithm)
+candidate files: 62
+candidate_manifest_sha256: 18dba5bb215e6df269e8daacd43538fc7ba5ffd544ba7982ea0fa2b1815f961e
+algorithm: relative_path:sha256\n (release_identity.candidate_manifest_sha256; no size)
+review workspace files: 199
+review_workspace_manifest_sha256: f8388ff0f7cbce287020bc216801cbbab19a874445dc94efa4a1e837c9933ee6
+algorithm: relative_path:sha256:size\n (exclude .venv/__pycache__/dist/.git + self-ref report/evidence log)
+
+## Round6 regression — 2026-08-03
+
+R2 specialty: 233 passed (/tmp/r2-round6-specialty.txt)
+R1A/R1B+profile+execute_code: 283 passed; 9 error = PermissionError ~/.hermes (coding-agent ban)
+compileall credential_guard: exit 0
+full pytest sandbox: 869 passed, 2 xfailed; remaining failed/errors = PermissionError ~/.hermes + build/Hermes-dependent
+logic subset (exclude hermes/build/ssh sandbox-touching): 766 passed, 2 xfailed, 0 failed (/tmp/r2-round6-logic2.txt)
+freeze reconfirm twice: candidate 18dba5bb… (62 files, path:sha256\\n); review f8388ff0… (199 files, path:sha256:size\\n)
+approval.py / tool_execution.py: untouched
+
+## Round7 T1 RED — main Agent path order — 2026-08-03
+
+command: HERMES_AGENT_ROOT=/tmp/credential-guard-r2-hermes-source HERMES_SPIKE_PYTHON=/tmp/credential-guard-r2-hermes-venv/bin/python .venv/bin/python -m pytest tests/test_r2_main_agent_path.py::test_main_agent_approve_reaches_handler_adapter_not_ready -q -p no:cacheprovider
+exit_code: 1
+summary: RED proves real Hermes order tool_request→tool_execution; current on_tool_execution sees ANALYZED and fail-closes without next_call — pre_tool_call=0 approval_gate=0 handler=0; plan prematurely invalidated
+observed: order=["tool_request","tool_execution"] counts.pre_tool_call=0 plan_state=invalidated
+evidence: /tmp/r2-round7-t1-red.txt /tmp/r2-round7-t1-red-dump.txt
+notes: fixture/import path fixed with optional-dep stubs; failure is product order semantics not missing deps
+
+
+## Round7 T1 GREEN — main Agent path — 2026-08-03
+
+command: HERMES_AGENT_ROOT=/tmp/credential-guard-r2-hermes-source HERMES_SPIKE_PYTHON=/tmp/credential-guard-r2-hermes-venv/bin/python .venv/bin/python -m pytest tests/test_r2_main_agent_path.py tests/test_reference_approval.py tests/test_injection_toctou.py tests/test_config_lock_race.py tests/test_plan_key_reuse_attack.py tests/test_http_reference_tool.py tests/test_r2_published_snapshot.py -q -p no:cacheprovider
+exit_code: 0
+summary: 140 passed — real order tool_request→tool_execution→pre_tool_call→approval_gate→handler; deny/timeout/error invalidate; mutate/identity/session fail-closed; plain non-interference; finalize+consume in formal handler; R3 still adapter-not-ready
+observed_order: ["tool_request","tool_execution","pre_tool_call","approval_gate","handler"]
+evidence: /tmp/r2-round7-t1-green-full.txt
+notes: no Hermes core / worker / .ssh / dist / git changes; typo fix _Bound_execution→_bound_execution
+
+## Round7 T1 MUTATION — restore pre-approval consume without next_call — 2026-08-03
+
+command: temporary monkeypatch on_tool_execution to invalidate ANALYZED without next_call + pytest test_main_agent_approve
+exit_code: 1 (expected RED under mutation)
+summary: see inline mutation below
+
+## Round7 T1 MUTATION RED under old ANALYZED skip-next — 2026-08-03
+
+command: CG_MUTATE_OLD_EXEC=1 + test_mutation_old_analyzed_skip_next_call_breaks_main_agent_approve
+exit_code: 0 (mutation test asserts pre_tool_call=0 handler=0 under mutated callback)
+summary: restoring ANALYZED fail-closed without next_call breaks main-agent approve path — load-bearing
+
+## Round7 T2 GREEN — health check tool middleware identity — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_check_tool_middlewares.py tests/test_plugin_registration.py -q
+exit_code: 0
+summary: 24 passed — tool_request/tool_execution/pre_tool_call/handler callable identity; replace/remove RED
+
+## Round7 T3/T4/T5 GREEN — 2026-08-03
+
+R2 specialty: 256 passed (/tmp/r2-r7-final-specialty.txt)
+capacity unique-key + mutation: 12 passed
+freeze twice: e65bd1d9… then reconfirm after doc/evidence updates
+independent freeze gate: tests/test_r2_freeze_evidence.py passed
+
+## Round7 T7 coding-agent self-check — 2026-08-03
+
+1. main agent path: 10 passed exit 0
+2. R2 specialty: 256 passed exit 0
+3. health check: 24 passed exit 0
+4. capacity/replay/race: 12 passed exit 0
+5. package AST (non-.hermes): 16 passed; hermes-venv touch = PermissionError (coding-agent ban, not logic)
+6. full pytest sandbox: hermes/build/.hermes PermissionError + R0 spike needing real hermes venv — same class as Round6
+7. compileall credential_guard: exit 0
+8. freeze digest consecutive equal: True; candidate fc9fe54c… consecutive equal: True
+
+Boundaries: no Hermes core edits; no worker/.ssh/real targets/R3/dist/version/git; hermes source copy remains mode 444
+
+
+## Round7 T1 MUTATION RED under old ANALYZED skip-next — 2026-08-03
+
+command: CG_MUTATE_OLD_EXEC=1 + test_mutation_old_analyzed_skip_next_call_breaks_main_agent_approve
+exit_code: 0 (mutation test asserts pre_tool_call=0 handler=0 under mutated callback)
+summary: restoring ANALYZED fail-closed without next_call breaks main-agent approve path — load-bearing
+
+## Round7 T2 GREEN — health check tool middleware identity — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_check_tool_middlewares.py tests/test_plugin_registration.py -q
+exit_code: 0
+summary: 24 passed — tool_request/tool_execution/pre_tool_call/handler callable identity; replace/remove RED
+
+## Round7 T3/T4/T5 GREEN — 2026-08-03
+
+R2 specialty: 256 passed (/tmp/r2-r7-final-specialty.txt)
+capacity unique-key + mutation: 12 passed
+freeze twice: e65bd1d9… then reconfirm after doc/evidence updates
+independent freeze gate: tests/test_r2_freeze_evidence.py passed
+
+## Round7 T7 coding-agent self-check — 2026-08-03
+
+1. main agent path: 10 passed exit 0
+2. R2 specialty: 256 passed exit 0
+3. health check: 24 passed exit 0
+4. capacity/replay/race: 12 passed exit 0
+5. package AST (non-.hermes): 16 passed; hermes-venv touch = PermissionError (coding-agent ban, not logic)
+6. full pytest sandbox: hermes/build/.hermes PermissionError + R0 spike needing real hermes venv — same class as Round6
+7. compileall credential_guard: exit 0
+8. freeze digest consecutive equal: True; candidate fc9fe54c… consecutive equal: True
+
+Boundaries: no Hermes core edits; no worker/.ssh/real targets/R3/dist/version/git; hermes source copy remains mode 444
+
+
+## Round7 evidence-false-green RED — mechanical authenticity gate — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_r2_evidence_authenticity_gate.py -q -p no:cacheprovider
+exit_code: 1
+summary: 9 failed — current test_r2_main_agent_path PROBE and scripts/run_r2_e2e.py still overlay wrap_req/wrap_exec/wrap_pre on mgr callback lists, clear transform_tool_result, re-register counted_handler, and hardcode formal/handler/dispatch True
+evidence: /tmp/r2-evidence-gate-red.txt
+notes: prior Round7 "10 passed" Framework E2E self-check is void as acceptance evidence due to callback-wrapper observation bias; product order fix retained
+
+## Round7 evidence-false-green GREEN — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_r2_evidence_authenticity_gate.py -q
+exit_code: 0
+summary: 11 passed — mechanical gate rejects wrapper overlay / counted re-register / hardcoded True / transform clear; mutations prove restored wrappers and hardcoded True trip the gate
+
+command: HERMES_AGENT_ROOT=... HERMES_SPIKE_PYTHON=... pytest tests/test_r2_main_agent_path.py -q
+exit_code: 0
+summary: 14 passed — setprofile observes tool_request→tool_execution→pre_tool_call→approval_gate→handler; formal/handler/dispatch from real identity/entry; plain uses not_applicable; old ANALYZED mutation + drop-callback mutations RED
+observed_order: ["tool_request","tool_execution","pre_tool_call","approval_gate","handler"]
+
+command: pytest tests/test_r2_e2e.py -q
+exit_code: 0
+summary: 12 passed — compatibility path keeps transform_tool_result; registry_dispatch from handler_call_count; r2_critical body-read/secret-resolve isolated from R1B transform
+
+command: pytest tests/test_check_tool_middlewares.py tests/test_plugin_registration.py -q
+exit_code: 0
+summary: 24 passed
+
+notes: prior Round7 "10 passed" Framework self-check VOID as acceptance evidence (callback-wrapper bias). Product tool_execution/reference_tools untouched. Not claiming R2 PASS.
+
+## Round7 evidence-false-green ACCEPTANCE — 2026-08-03
+
+1. authenticity gate: 11 passed exit 0 (/tmp/r2-r7e-gate.txt)
+2. main agent path: 14 passed exit 0 (/tmp/r2-r7e-main.txt) order tool_request→tool_execution→pre_tool_call→approval_gate→handler via setprofile
+3. r2 e2e: 12 passed exit 0 (/tmp/r2-r7e-e2e.txt)
+4. check + registration: 24 passed exit 0 (/tmp/r2-r7e-check.txt)
+5. R2 specialty (+authenticity gate): 271 passed exit 0 (/tmp/r2-r7e-specialty3.txt)
+6. logic subset (ignore hermes/build/release/plugin-load/spike/package-scan): 791 passed, 2 xfailed exit 0 (/tmp/r2-r7e-logic3.txt)
+7. compileall credential_guard: exit 0
+8. freeze twice equal: bac86e06035bf773605ebe1411914a9b1e38816b1d55b15d39ab82ef79025992
+   candidate_manifest_sha256: fc9fe54cec62f82af69b4f6686120181066dd4d8cb3e2ba9b72699c2782d322b (63 files)
+   review_workspace_manifest_sha256: 5e8c66fb5a1cf7fed9ac4e83237e936dda0ffcfc596473e29697e45295cbba82 (206 files)
+
+VOID: prior Round7 Framework "10 passed" self-check — callback wrapper observation bias.
+NOT claiming R2 PASS. Product tool_execution/reference_tools unchanged. Hermes core/worker/.ssh/dist/git untouched.
+
+## Round7 evidence-false-green FINAL freeze confirm — 2026-08-03
+
+specialty: 271 passed (/tmp/r2-r7e-specialty-final.txt) exit 0
+review_workspace_manifest_sha256: b32a2da544dd10580feec513682aa8e4b79a3f167fa4147778f0a2bf3ef7f9cd (206 files)
+freeze consecutive equal: see live verify_freeze_stable after this log append
+
+## Round8 B1 InvalidMarkerStore RED — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_invalid_marker_store.py -q
+exit_code: 1
+summary: 12 failed, 1 passed — get_invalid_marker_store missing; unbounded _INVALID contract RED
+evidence: /tmp/r2-r8-b1-red.txt
+
+## Round8 B1 InvalidMarkerStore GREEN + mutation — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_invalid_marker_store.py -q
+exit_code: 0
+summary: 13 passed — capacity≤PlanStore; overflow fail-closed; TTL reclaim; terminal/exec consume; concurrent flood bounded; plain tool passthrough under overflow; empty-identity circuit; reset clears; mutations (bare dict / no TTL / silent drop) RED via pytest.raises
+related regression: plan_key_reuse + tool_request_analysis + reference_approval = 51 passed
+evidence: /tmp/r2-r8-b1-green.txt /tmp/r2-r8-b1-regress.txt
+
+## Round8 B2 freeze-module binding RED — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_r2_freeze_evidence.py -q
+exit_code: 1
+summary: 3 failed, 6 passed — production/test enumerator excluded freeze module; tampering freeze module in tmp_path copy left digest unchanged
+evidence: /tmp/r2-r8-b2-red.txt
+voided_freeze: 4c4b4113e2cb1f21582dc0a0329592fbc538bd12b6765676d6f27d904e8a5ec6
+
+## Round8 B2 freeze-module binding GREEN + mutation — 2026-08-03
+
+command: .venv/bin/python -m pytest tests/test_r2_freeze_evidence.py -q
+exit_code: 0
+summary: 9 passed — freeze module in file set; only .r2-freeze-evidence.sha256 excluded as recursive output; report/evidence remain named evidence hashes; all tampers on tmp_path copies; excluding-freeze-module mutation RED
+evidence: /tmp/r2-r8-b2-green2.txt
+
+## Round8 coding-agent self-check — 2026-08-03
+
+1. InvalidMarkerStore attack+mutation: 13 passed exit 0 (/tmp/r2-r8-b1-final.txt)
+2. freeze evidence+mutation: 9 passed exit 0 (/tmp/r2-r8-b2-final.txt)
+3. authenticity gate: 11 passed exit 0 (/tmp/r2-r8-gate.txt)
+4. main agent path + R2 E2E: 26 passed exit 0 (/tmp/r2-r8-main-e2e.txt)
+5. R2 specialty (+invalid marker + freeze + authenticity): see /tmp/r2-r8-specialty-final.txt
+6. logic subset (ignore hermes/build/release/plugin-load sandbox): coding-agent PermissionError on ~/.hermes same class as Round7; R2 logic green after report §16
+7. compileall credential_guard: exit 0
+8. freeze digest consecutive equal: see live verify_freeze_stable after this log append
+   candidate_manifest_sha256: 04777ac4e17924fe4b765ef3cd75d3db96e29487a92027846b187732d9916209 (64 files)
+   review_workspace_manifest_sha256: cfb4ac444108aec2920187dec33b086f23e382b0e4becf1981be8e63191fb221 (209 files)
+
+VOID: prior freeze 4c4b4113… (final dual-review blockers).
+NOT claiming R2 PASS. Round7 product order + setprofile evidence preserved. Hermes core/worker/.ssh/dist/git untouched.
+
+## Round8 FINAL self-check confirm — 2026-08-03
+
+specialty: 287 passed (/tmp/r2-r8-specialty-final.txt) exit 0
+main+e2e: 26 passed (/tmp/r2-r8-main-e2e.txt) exit 0
+authenticity gate: 11 passed exit 0
+compileall: exit 0
+freeze consecutive equal: d6b41cefe62e0dc0975ce32ff25234dc3e11566c4fba3d9f7a7ca8920acfdb07
+candidate_manifest_sha256: 04777ac4e17924fe4b765ef3cd75d3db96e29487a92027846b187732d9916209 (64 files)
+review_workspace_manifest_sha256: cfb4ac444108aec2920187dec33b086f23e382b0e4becf1981be8e63191fb221 (209 files)
+
+NOTE: freeze digest above is coding-agent self-check only; main agent must recompute outside candidate with fixed algorithm. NOT claiming R2 PASS.
+
+## Round8 post-evidence-log freeze reconfirm — 2026-08-03
+
+After appending FINAL self-check to .r2-tdd-evidence.log (named evidence binding):
+freeze consecutive equal: 1c29344b0aa81ce84482115320d896bc37e771b0dfd2d77759d699e44e41d7e5
+logic subset (ignore hermes/build/release/plugin-load): 824 passed, 2 xfailed exit 0 (/tmp/r2-r8-logic-final.txt)
+NOT claiming R2 PASS. Coding-agent freeze digest is not the main-agent acceptance identity.

@@ -1,0 +1,13 @@
+include plugin.yaml
+include requirements.txt
+include release-metadata.json
+include pyproject.toml
+recursive-include credential_guard *.py
+prune tests
+prune scripts
+prune docs
+prune .venv
+prune .pytest_cache
+global-exclude *.md
+global-exclude .m2-*
+global-exclude .m0-*

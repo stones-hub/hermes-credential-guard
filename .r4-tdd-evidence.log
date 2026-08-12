@@ -1,0 +1,201 @@
+# R4 TDD evidence log (no secret/decoy bodies)
+
+## Scope
+Allowed files only per .r4-implementation-task.md. No CLAUDE/HANDOVER/freeze/dist updates. No R4 sign-off.
+
+## Slice A RED (format preserve)
+Command:
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_injected_result_guard.py -k 'preserve or registered' -q -p no:cacheprovider
+First expected failures (pre-implementation):
+  - test_preserve_clean_json_whitespace_and_field_order: JSON parse/serialize reordered compact dump
+  - registered tests: placeholder was <SECRET:...> not <CREDENTIAL:name>
+  - ModuleNotFoundError: credential_guard.result_guard
+Result: RED confirmed (6 failed, 2 passed on that filter run).
+
+## Slice A–E GREEN
+Created credential_guard/result_guard.py; narrowed hooks.py to call guard_tool_result.
+Command:
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest tests/test_injected_result_guard.py -q -p no:cacheprovider
+Result: 27 passed (unit + adapter D cases later expanded).
+
+## Mutation A (JSON parse/serialize reintroduced)
+Temporarily forced json.loads/dumps before guard in hooks.py.
+Command:
+  pytest tests/test_injected_result_guard.py::test_preserve_clean_json_whitespace_and_field_order
+Result: FAILED (compact JSON != original) — mutation killed. hooks.py restored; same test PASSED.
+
+## Slice D adapters
+http.py / process.py now call unified guard with session materials; removed ***/PROCESS_OUTPUT_LEAK product path for echoed secrets.
+R4 D tests in test_injected_result_guard.py: PASSED.
+Historical test_b3_stdout_echo_decoy_fail_closed expects PROCESS_OUTPUT_LEAK + ok=False — FAILED (intentional R4 product change; test file not in allow-list).
+
+## Slice F authenticity
+Command:
+  pytest tests/test_result_guard_authenticity_gate.py -q -p no:cacheprovider
+Result: PASSED (discover_plugins + hermes_cli.lifecycle.invoke_hook + setprofile enters guard_tool_result; provider secret/auth/pem residue 0).
+
+## Slice G non-interference
+Command:
+  pytest tests/test_non_interference_v2.py -q -p no:cacheprovider
+  .venv/bin/python scripts/run_v2_non_interference_e2e.py
+Result: 10 passed; E2E exit 0.
+
+## R4 special trio (aggregate)
+Command:
+  pytest tests/test_injected_result_guard.py tests/test_non_interference_v2.py tests/test_result_guard_authenticity_gate.py -q -p no:cacheprovider
+Result: 42 passed.
+
+## compile
+Command:
+  python -m compileall -q credential_guard/result_guard.py credential_guard/hooks.py credential_guard/adapters/http.py credential_guard/adapters/process.py
+Result: exit 0.
+
+## Full pytest (blocking)
+Command:
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider --tb=no
+Result: 20 failed, 1390 passed, 2 xfailed.
+
+Failures requiring out-of-allow-list migration (historical assertions on old SAFE JSON / <SECRET:...> / PROCESS_OUTPUT_LEAK / freeze sidecar):
+  - tests/test_tool_result_guard.py (4)
+  - tests/test_fail_closed.py (2)
+  - tests/test_file_registry_bridge.py (2)
+  - tests/test_sensitive_paths.py (3)
+  - tests/test_variant_limits.py (6)
+  - tests/test_r3b_process_adapter.py::test_b3_stdout_echo_decoy_fail_closed
+  - tests/test_final_zip_encoding_canary.py::test_probe_urlsafe_pem_provider_bound_blocks
+  - tests/test_r3c_historical_identity_gate.py::test_r3c_reclosure_candidate_sidecar_matches_live_workspace
+
+## Closed vs open
+Closed within allow-list: R4 authority module, hooks, HTTP/process reuse, R4 special tests, NI E2E, compile, mutations for format preserve.
+Open / BLOCKING: cannot migrate historical tests or freeze sidecars without expanding allow-list; full suite not 0 failed.
+
+## Round 2 narrow fix — B1/B2/B3 (2026-08-05) — BLOCKING retained
+
+Authority: .r4-round2-narrow-fix-task.md. No historical test migration, no freeze/sign-off.
+
+### B1 authenticity — AIAgent.run_conversation
+RED: prior gate used hermes_cli.lifecycle.invoke_hook as Agent stand-in (insufficient).
+GREEN: tests/test_result_guard_authenticity_gate.py PROBE path is
+  discover_plugins → PluginManager → AIAgent.run_conversation → transform_tool_result
+  → guard_tool_result (sys.setprofile code identity) → Provider-bound tool messages.
+Forbidden: direct invoke_hook, callback list replace, hardcoded evidence counts.
+Mutation: reintroducing invoke_hook("transform_tool_result", ...) killed by false-green gate.
+Command:
+  HERMES_AGENT_ROOT=/tmp/credential-guard-r2-hermes-source \
+  HERMES_SPIKE_PYTHON=/tmp/credential-guard-r2-hermes-venv/bin/python \
+  .venv/bin/python -m pytest tests/test_result_guard_authenticity_gate.py -q -p no:cacheprovider
+Result: 4 passed. Evidence: /tmp/r4-r2-b1-auth5.txt
+
+### B2 auth Header/Cookie unique registered → <CREDENTIAL:name>
+RED: unique registered Authorization/Cookie values overwritten to <REDACTED_SECRET>
+  (7 failed on new assertions; /tmp/r4-r2-b2b3-red.txt).
+GREEN: _auth_cookie_replacement_value — unique CREDENTIAL keep; 0 or ≥2 identities → REDACTED_SECRET;
+  header name + colon spacing preserved.
+Mutation: monkeypatch _auth_cookie_replacement_value → always REDACTED_SECRET detectable.
+Result (injected suite): 39→40+ passed after large-test bound adjust.
+
+### B3 scan over-limit / scanner exception fail-closed
+RED: oversize clean payload returned identical (window bypass of MAX_PRIVATE_KEY_SCAN_BYTES);
+  injected EncodedPrivateKeyScanError swallowed by window path.
+GREEN: deleted window/streaming fallback in _private_key_present; exceptions propagate to
+  RESULT_GUARD_FAIL_TEXT. Large tests only cover head/mid/tail/boundaries under
+  MAX_PRIVATE_KEY_CANDIDATE_LENGTH.
+Mutation: monkeypatch _private_key_present to swallow EncodedPrivateKeyScanError → oversize
+  passes (detectable); production call site contains_private_key_material raise → FAIL_TEXT.
+
+### Aggregate R4 specialty
+Command:
+  pytest tests/test_injected_result_guard.py tests/test_non_interference_v2.py \
+    tests/test_result_guard_authenticity_gate.py -q -p no:cacheprovider
+Result: 54 passed. NI E2E: 10 passed. compileall allow-list modules: exit 0.
+Evidence: /tmp/r4-r2-specialty.txt /tmp/r4-r2-ni-e2e.txt
+
+### Full pytest (still BLOCKING — historical assertions not migrated)
+Command:
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider --tb=no
+Result: 20 failed, 1402 passed, 2 xfailed.
+Same out-of-allow-list historical files as Round 1 (SAFE JSON / SECRET / PROCESS_OUTPUT_LEAK /
+  variant_limits / r3c historical identity sidecar). Evidence: /tmp/r4-r2-full.txt
+
+### B4 — forbidden files not content-edited this round
+credential_guard/__init__.py sha256=d245adf599f944d55b0b701c1e72a18fa4baff9aa1bf89c7a9940d064c4563ed
+  bytes_equal /tmp/r3c-reclosure-review-8RnGKK (mtime-only drift vs prior recording possible;
+  this round performed no Write/StrReplace on the file).
+scripts/build_release_artifacts.py sha256=52efef9b1d58a489d09e5197f44e1be724ace9e83cba099cd1af303f4df89c9b
+  bytes_equal /tmp/r3c-reclosure-review-8RnGKK (same honesty note).
+
+### Verdict
+BLOCKING — B1/B2/B3 fixed within allow-list; full suite still 20 failed pending historical
+migration approval; no freeze/sign-off.
+
+## Round 4 final-review blockers narrow fix (2026-08-05) — no freeze/sign-off
+
+Authority: .r4-round4-final-review-blockers-task.md. Allow-list only:
+  credential_guard/result_guard.py, tests/test_variant_limits.py,
+  tests/test_result_guard_authenticity_gate.py, .r4-tdd-evidence.log
+  (test_injected_result_guard.py not required this round).
+
+### B1 aggregate budget on result_guard
+RED: result_guard built per-item variants; test_variant_limits accepted tool redact under
+  MAX_REGISTRY_ITEMS / MAX_TOTAL_VARIANT_CHARS over-limit (bypassed egress gates).
+GREEN: _merged_identities + _merge_replacement_pairs reuse redactor_mod.MAX_REGISTRY_ITEMS and
+  MAX_TOTAL_VARIANT_CHARS on registry+session_materials merged view; overlimit/collision →
+  RESULT_GUARD_FAIL_TEXT. Restored tool fail-closed assertions; added merged session+registry
+  count/chars RED tests.
+Mutation: delete count gate or total-chars gate → over-limit path redacts (detectable RED).
+Command:
+  pytest tests/test_variant_limits.py -q -p no:cacheprovider
+Result: 12 passed. Evidence: /tmp/r4-r4-verify/blockers.txt
+
+### B2 AIAgent install-source path evidence
+RED: probe cwd=REPO; load_path/agent_api hardcoded labels; no proof callback/hooks/result_guard
+  __file__ under temp HERMES_HOME/plugins/credential-guard.
+GREEN: neutral tmp cwd; derived callback_under_plugin / hooks_under_plugin /
+  result_guard_under_plugin and plugin_rel_* path identities; repo-tree booleans must be false.
+Mutation: CG_SABOTAGE_INSTALL_GUARD breaks only install copy (repo healthy) →
+  CG_SABOTAGE_INSTALL_MARKER reaches Provider; no healthy-repo fallback.
+Still discover_plugins → PluginManager → AIAgent.run_conversation → Provider raw requests.
+Command:
+  HERMES_AGENT_ROOT=/tmp/credential-guard-r2-hermes-source \
+  HERMES_SPIKE_PYTHON=/tmp/credential-guard-r2-hermes-venv/bin/python \
+  pytest tests/test_result_guard_authenticity_gate.py -q -p no:cacheprovider
+Result: 5 passed. Two-blocker aggregate: 17 passed.
+
+### R4 specialty / NI / R2-R3 / historical8 / compile / full
+R4 specialty (injected + NI v2 + authenticity): 55 passed
+NI E2E script: 10 passed
+R2/R3 regression batch: 208 passed
+Historical 8 files: 122 passed, 1 failed
+  FAILED test_r3c_reclosure_identity_is_layered_from_r4_workspace
+  cause: live 284 != 271+12; undeclared path .r4-round4-final-review-blockers-task.md
+  (task instruction file not in _R4_DELTA_PATHS; fixing requires
+  tests/test_r3c_historical_identity_gate.py — OUT OF ALLOW-LIST this round)
+compileall credential_guard: exit 0
+Full pytest: 1 failed, 1434 passed, 2 xfailed
+Scope: only allow-list production/test edits; no freeze sidecar, dist, docs, HANDOVER, Hermes.
+
+### Verdict
+BLOCKING — B1 and B2 closed within allow-list; full suite not 0 failed solely due to
+undeclared round-4 task-file topology vs layered R4 delta (out of allow-list).
+No freeze/sign-off.
+
+## Post-Round-4 main-agent closure and final freeze (2026-08-05)
+
+The Round-4 task file was added to the explicit R4 topology delta in
+`tests/test_r3c_historical_identity_gate.py`. Historical R3 content digest and manifest-byte
+pins remain unchanged in the immutable R3 sidecar; only current R4 path topology is layered.
+
+Authoritative main-agent reruns after that closure:
+- R3 historical identity gate: 26 passed
+- aggregate budget + installed-source authenticity + injected guard: 57 passed
+- R4 specialty (injected + NI v2 + authenticity): 55 passed
+- NI E2E: 10 passed
+- R2/R3 regression: 401 passed
+- full pytest: 1435 passed, 2 xfailed, 0 failed
+- in-memory Python compile: 165 files, 0 failed
+- R3 sidecar sha256: ca0738f16df030e5d0360e51ce7d9f4f678068ea565c9739d32caf8284518002
+- final target sha256: 4842d642056d7cde84bd5c4cc2b61e97991ce292cc33dc3b090e5d99cb5249d6
+
+STATUS: post-Round-4 verification is green; candidate identity is recorded only in the excluded
+`.r4-freeze-evidence.sha256` to avoid a self-referential hash inside this included evidence log.
+Final three-way read-only review is still pending; this is not R4 PASS.

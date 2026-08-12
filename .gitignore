@@ -1,0 +1,66 @@
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Virtual environments and package-manager state
+.venv/
+venv/
+env/
+ENV/
+.uv/
+
+# Build by-products
+build/
+*.egg-info/
+.eggs/
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+*.local
+credential-guard.json
+credentials.json
+.secrets/
+
+# Project runtime data
+uploads/
+workspaces/
+task_logs/
+feas_logs/
+kb_logs/
+.dep-cache/
+runtime-env/
+.localdata/
+
+# Agent scratch files
+.*task.md
+.m[0-9]*.md
+.r[0-9]*.md
+.sandbox-write-probe
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Backups and temporary files
+*.bak
+*.bak[0-9]
+*.tmp
+
+# Release artifacts in dist/ are intentionally versioned.

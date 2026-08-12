@@ -1,0 +1,323 @@
+# R3B strict TDD evidence log
+# Rules: no full synthetic decoy bodies; hosts redacted as [SYNTHETIC_HOST_REDACTED];
+# decoys as [SYNTHETIC_DECOY_REDACTED]; no absolute program paths; no Profile/SSH paths.
+# Candidate only — do not claim R3B/R3 PASS.
+
+## Pre-work freeze (2026-08-04)
+algorithm: sorted POSIX relative-path strings (Unicode code-point order); each line path:sha256:size with trailing newline; SHA-256 of joined blob
+excludes: .venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256,.r3b-tdd-evidence.log
+review_workspace_files: 232
+review_workspace_sha256_1: 9f4b9daf9fe99a21ed6d1241199c7d58bd41a63694c3c9655901ac6e8de8f04f
+review_workspace_sha256_2: 9f4b9daf9fe99a21ed6d1241199c7d58bd41a63694c3c9655901ac6e8de8f04f
+review_workspace_stable: True
+note: did not modify .r2-freeze-evidence.sha256 or .r3a-freeze-evidence.sha256
+
+## Baseline — starting
+
+## Baseline results
+### R3A specialty
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3a_production_transport.py tests/test_r3a_evidence_hygiene.py tests/test_r3a_main_agent_path.py tests/test_r3a_e2e.py
+exit_code: 0
+result: 27 passed in 7.63s
+
+### R2 main chain (48)
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r2_main_agent_path.py tests/test_r2_e2e.py tests/test_injection_toctou.py tests/test_r2_evidence_authenticity_gate.py
+exit_code: 0
+result: 48 passed in 41.32s
+
+baseline_ok: True — proceeding to Slice B1
+
+## Slice B1 — replace old process binding schema
+
+### B1.1 RED — process_env accepts fixed program schema
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_process_binding_schema.py::test_b1_process_env_accepts_fixed_program_schema
+exit_code: 1
+failure_mechanism: ConfigError CONFIG_SCHEMA — _PROCESS_ENV_FIELDS still requires tool; rejects program/argv/timeout/limits
+result: 1 failed (RED accurate)
+
+### B1.1 GREEN
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_process_binding_schema.py::test_b1_process_env_accepts_fixed_program_schema
+exit_code: 0
+result: 1 passed
+
+### B1 suite GREEN + mutation scrub
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_process_binding_schema.py tests/test_config_v2.py
+exit_code: 0
+result: 128 passed
+covers: new schema accept; legacy terminal/execute_code reject; unsafe program/argv/env/limits; digest binds program/argv/env; scrub hides program/env/argv; mutation leaky scrub demonstrates gate
+files: credential_guard/bindings.py, credential_guard/runtime_config.py, tests/test_r3b_process_binding_schema.py, tests/test_config_v2.py
+
+## Slice B2 — program identity + TOCTOU
+
+### B2.1 RED — capture rejects symlink
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_process_identity.py::test_b2_capture_rejects_symlink
+exit_code: 2
+failure_mechanism: ImportError — credential_guard.process_identity missing
+result: 1 error (RED accurate for absent module)
+
+### B2 suite GREEN + mutations
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_process_identity.py
+exit_code: 0
+result: 9 passed
+covers: symlink/mode/owner/executable reject; capture accept; content change detect; verified private copy survives pathname tamper; mutation skip-symlink and skip-recheck turn RED vs contract
+files: credential_guard/process_identity.py, tests/test_r3b_process_identity.py
+
+## Slice B3 — process adapter (env + stdin)
+
+### B3.1 RED
+failure_mechanism: ImportError — adapters.process missing
+### B3 suite GREEN
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_process_adapter.py
+exit_code: 0
+result: 6 passed
+covers: env once + parent/followup 0; stdin once argv/env 0; stdout decoy fail-closed; timeout kill/reap; output flood; result omits program/env/argv/decoy
+files: credential_guard/adapters/process.py, tests/test_r3b_process_adapter.py
+
+## Slice B4 — formal tool + handler wiring
+
+### B4.1 RED
+failure_mechanism: ModuleNotFoundError — process_tools missing
+### B4 suite GREEN
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_handler_wiring.py
+exit_code: 0
+result: 2 passed
+R3A handler regression + register: see ordered verify
+files: process_tools.py, __init__.py, tool_execution.py, tool_request.py, injection_plan.py, approval.py, reference_tools.py, tests/test_r3b_handler_wiring.py
+
+## Slice B5 — main agent E2E + authenticity
+
+### B5 main-agent + gates GREEN
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_main_agent_path.py
+result: 9 passed
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_e2e.py tests/test_r3b_evidence_authenticity_gate.py tests/test_r3b_evidence_hygiene.py
+result: 10 passed
+covers: approve env order+counts; deny/timeout/replay/program_mutate/args_mutate; drop-seam mutations; authenticity gate; evidence hygiene
+files: tests/test_r3b_main_agent_path.py, tests/test_r3b_e2e.py, tests/test_r3b_evidence_authenticity_gate.py, tests/test_r3b_evidence_hygiene.py, scripts/run_r3b_e2e.py
+
+## Ordered verification (candidate)
+
+### Ordered verification results (candidate — not R3B/R3 PASS)
+1. Schema/identity/adapter/handler: 59 passed
+2. R3B main/e2e/authenticity/hygiene: 19 passed
+3. R3A specialty (+handler/schema/authenticity): 53 passed
+4. R2 main chain: 48 passed
+5. compileall: exit 0
+6. Specialty regression after registration/CLI fix: 136 passed (R3B+R3A+plugin/check)
+7. Full pytest (this env): 1076 passed, 2 xfailed, 18 failed, 83 errors
+   - R3B-related fix applied: plugin registration now expects credential_process_run (4 tools)
+   - Remaining failed/errors: OS-boundary PermissionError on [SENSITIVE_PATH_REDACTED] hermes-agent / release artifact paths (same class as R3A coding-agent sandbox notes); not R3B process logic
+   - Not a non-sandbox authoritative full-suite claim
+
+### Candidate freeze (POSIX relative-path Unicode code-point sort; path:sha256:size\\n)
+excludes: .venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256,.r3b-tdd-evidence.log
+review_workspace_files: 244
+review_workspace_sha256_1: 8491793d0006ed6fd7c7fa75e848b717e701c9781b59f8778b0d8b404447da9c
+review_workspace_sha256_2: 8491793d0006ed6fd7c7fa75e848b717e701c9781b59f8778b0d8b404447da9c
+review_workspace_stable: True
+note: did not modify .r2-freeze-evidence.sha256 or .r3a-freeze-evidence.sha256
+
+## Candidate status
+status: R3B coding CANDIDATE only — do not sign R3B/R3 PASS
+await: main-agent independent acceptance + three-way read-only review
+
+## Round 2 — tests-only OpenSSL/LibreSSL hex parse (2026-08-04)
+
+root_cause: helper used `openssl dgst -sha256 -hex | awk '{print $2}'`; macOS LibreSSL 3.3.6 (`/usr/bin/openssl`) prints bare 64-hex so `$2` is empty; Homebrew OpenSSL 3 prints `SHA2-256(stdin)= HEX` so `$2` works. Adapter inject was fine (exit 0, stdout ok); marker empty was tests-only false RED.
+
+### Round2 RED (PATH=/usr/bin first → LibreSSL)
+command: PATH="/usr/bin:/bin:/usr/sbin:/sbin" .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_process_adapter.py::test_b3_env_inject_once_parent_and_followup_child_zero tests/test_r3b_process_adapter.py::test_b3_stdin_inject_once_argv_env_zero tests/test_r3b_process_adapter.py::test_b3_result_omits_program_path_env_argv tests/test_r3b_handler_wiring.py::test_b4_approve_env_resolve_and_process_start_once tests/test_r3b_main_agent_path.py::test_r3b_main_agent_approve_env
+failure_mechanism: marker.strip() == '' vs hashlib.sha256(decoy).hexdigest(); main-agent marker_ok False
+result: 4 failed, 1 passed (result_omits does not assert marker hex; replay not in this RED set)
+
+### Round2 GREEN (tests-only)
+fix: helpers write last matching [0-9a-fA-F]{64} token from openssl dgst -hex (not awk $2)
+mutation: test_r3b_openssl_hex_marker_parse_mutation — legacy $2 empty on bare hex; normalize GREEN on bare+prefixed; live LibreSSL/OpenSSL == hashlib
+deleted: .r3b-debug.py (temp debug only)
+files: tests/test_r3b_process_adapter.py, tests/test_r3b_handler_wiring.py, tests/test_r3b_main_agent_path.py, .r3b-tdd-evidence.log
+production: credential_guard/ untouched
+
+### Round2 ordered verify (candidate — not R3B/R3 PASS)
+1. LibreSSL PATH original failures + mutation: 7 passed
+2. tests/test_r3b_*.py (LibreSSL PATH preferred): 79 passed
+3. R3A specialty: 27 passed
+4. R2 main chain: 48 passed
+5. compileall credential_guard tests scripts: exit 0
+6. full pytest: not re-run this round; prior sandbox OS-boundary class still applies if re-run
+
+status: Round2 tests-only fix CANDIDATE only — do not claim R3B PASS
+
+## Round 3 — final review blockers A–D (2026-08-04)
+
+scope: close four valid Hermes review blockers only; R3B remains CANDIDATE — do not claim R3B/R3 PASS
+production: credential_guard/adapters/process.py; credential_guard/redactor.py (MAX_SECRET_LENGTH 1MiB); credential_guard/config.py (MAX_CONFIG_FILE_BYTES 2MiB)
+tests/scripts: test_r3b_process_adapter.py; test_r3b_plugin_manager_graph.py; test_r3b_wire_e2e.py; test_r3b_evidence_authenticity_gate.py; scripts/run_r3b_wire_e2e.py; scripts/run_r3b_e2e.py; test_variant_limits.py
+did_not_touch: CLAUDE.md HANDOVER.md R3A/R2 freeze sidecars; no R3C/R4/R5/R6
+
+### Blocker A — process group cleanup
+RED mechanism: mutation `_kill_and_reap` → leader-only `proc.kill` leaves descendant alive and PGID present (test_b3_mutation_leader_only_kill_leaves_descendant)
+GREEN: timeout + output-limit kill entire session/group when `start_new_session` and `pgid==pid`; bounded SIGTERM→SIGKILL; always reap direct child; safe errors omit PID/PGID/paths
+measured: after timeout/output-limit, leader dead, descendant dead, PGID gone (bounded poll)
+
+### Blocker B — nonblocking stdin under shared deadline
+RED mechanism: mutation restore sync `stdin.write` + blocking read; large unread token hangs past 1s bound (TimeoutError wall ≥2.5s) — test_b3_mutation_sync_stdin_write_hangs_past_deadline
+GREEN: selector loop for stdin write + stdout/stderr read; nonblocking fds; partial write; EAGAIN; BrokenPipe; env closes stdin then same deadline loop; no communicate(); no background writer threads
+measured: 900KiB unread stdin + timeout_seconds=1 returns PROCESS_TIMEOUT in <5s; flood+unread returns bounded and PGID gone; partial-write helper digest matches once
+schema: MAX_SECRET_LENGTH raised to 1_048_576 (high bounded); not used as tiny-cap workaround
+
+### Blocker C — real PluginManager graph
+RED/gate: authenticity gate forbids embedded class Ctx, registry.deregister(, register(Ctx(, and full-env clone call in graph/wire probes
+GREEN: isolated HERMES_HOME user-plugin copy + discover_plugins(force=True); record formal middleware/hook/handler code ids; setprofile observe; identities unchanged after approve/deny
+call chain: PluginManager.discover_and_load → hermes_plugins.credential_guard.register → registry handler identity hermes_plugins.credential_guard…process_tools
+
+### Blocker D — public AIAgent + loopback provider wire E2E
+RED/gate: deleting raw_requests / approval_raw / restoring full-env clone / omitting env|stdin helper execution / hardcoding wire_secret_count=0 detected by gate or assertions
+GREEN: scripts/run_r3b_wire_e2e.py — loopback 127.0.0.1 OpenAI-compatible server; AIAgent.run_conversation; tools.tool_search.enabled=off; capture raw HTTP request bytes + approval raw reason/kwargs; env+stdin approve (helper once) and deny (resolve/start=0); minimal env whitelist
+measured (script main): env_approve/stdin_approve marker_ok + process_start_delta=1 + provider_logical_turns≥2 + approval_raw_count=1 + wire_secret_count=0; deny start/resolve deltas 0
+
+### Ordered verification (candidate — not R3B/R3 PASS)
+1. group cleanup + nonblocking stdin specialty (test_r3b_process_adapter): 15 passed
+2. PluginManager graph: 2 passed
+3. authenticity gate: 13 passed
+4. all tests/test_r3b_*.py: 102 passed
+5. R3A specialty: 27 passed
+6. R2 main chain: 48 passed
+7. compileall credential_guard tests scripts: exit 0
+8. full pytest (this env): 1103 passed, 2 xfailed, 16 failed, 83 errors — all inspected failures/errors are OS-boundary PermissionError on [SENSITIVE_PATH_REDACTED] hermes-agent/venv/bin/python / release artifact paths (same class as prior R3B/R3A sandbox notes); not R3B process/wire logic regressions
+9. freeze (POSIX relative-path Unicode code-point sort; path:sha256:size\\n; excludes .venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256,.r3b-tdd-evidence.log): see below
+
+### Candidate freeze
+review_workspace_files: 249
+review_workspace_sha256_1: 78fdacd8b130ddb096af25ec1527190e8175de2fd04a7e8843ad0ec02fc7dab3
+review_workspace_sha256_2: 78fdacd8b130ddb096af25ec1527190e8175de2fd04a7e8843ad0ec02fc7dab3
+review_workspace_stable: True
+note: did not modify .r2-freeze-evidence.sha256 or .r3a-freeze-evidence.sha256
+
+status: Round3 blocker-fix CANDIDATE only — do not claim R3B/R3 PASS
+await: main-agent independent acceptance + three-way read-only review
+
+## Round 4 — final review blockers A–D (2026-08-04)
+
+scope: close four valid Round4 Hermes review blockers only; R3B remains CANDIDATE — do not claim R3B/R3 PASS
+voided_prior_freeze: 250 files feb900c45d3e56cd282d8e9b45bbe28e4b63ca1b517e2f8972475f873a686998
+production: credential_guard/adapters/process.py (ProcessExecutionHandle + immediate PGID capture; fail-closed nonblocking)
+tests/scripts: test_r3b_process_adapter.py; test_r3b_main_agent_path.py; test_r3b_evidence_authenticity_gate.py; test_r3b_wire_e2e.py; scripts/run_r3b_wire_e2e.py
+did_not_touch: CLAUDE.md HANDOVER.md R3A/R2 freeze sidecars; no R3C/R4/R5/R6; no R3B/R3 PASS claim
+
+### Blocker A — immutable PGID at Popen
+RED: mutation cleanup-time getpgid(leader) leaves orphan after leader-first-exit (test_r4_mutation_cleanup_getpgid_leaves_orphan_when_leader_gone); mutation leader-only kill leaves TERM-ignore descendant (test_r4_mutation_leader_only_kill_leaves_term_ignore_descendant)
+GREEN: Popen(start_new_session=True) then immediate getpgid; require pgid==pid; store ProcessExecutionHandle; all cleanup paths use captured PGID (never rediscover); leader-exit-first still clears group; TERM-ignore escalates to KILL; PID/PGID/path omitted from results
+measured: leader dead, descendant dead, PGID gone after cleanup
+
+### Blocker B — nonblocking setup fail-closed
+RED: mutation restore swallow-OSError _set_nonblocking fails fail-closed contract (write_count>0 or not PROCESS_ADAPTER_FAILED)
+GREEN: _set_nonblocking raises NonblockingSetupError; stdin/stdout/stderr fault injection each returns PROCESS_ADAPTER_FAILED bounded; write count=0; group cleaned via captured PGID; no OSError/fd/PID/path/token leak
+measured: elapsed <5s; leader/PGID/descendant cleared
+
+### Blocker C — real PluginManager main-agent path (no self-prove Ctx)
+RED/gate: _scan_false_green / _scan_probe_forbidden predicates; mutation samples fed to same predicates must hit; forbids class Ctx, registry.deregister, register(Ctx, os.environ.copy, hardcoded loopback_only/used_environ_copy
+GREEN: test_r3b_main_agent_path.py rewritten — isolated plugin copy + discover_plugins; setprofile; list/elem/handler identity unchanged; approve/deny/timeout/replay/program_mutate/args_mutate retained; drop-seam mutates plugin copy BEFORE load
+measured: main+e2e+graph 13 passed; authenticity gate 20 passed
+
+### Blocker D — full raw HTTP bytes + audited loopback guard
+RED: mutation remove socket guard install → healthy_guarded False; authenticity forbids constant "loopback_only": True / "used_environ_copy": False
+GREEN: minimal raw TCP HTTP server captures request line+headers+body with bounded Content-Length; loopback socket.connect/connect_ex/create_connection/getaddrinfo guard before Agent import; loopback_only derived from audit; used_environ_copy derived from harness source scan; TEST-NET 203.0.113.1 blocked before original; env/stdin approve+deny retained
+measured: wire suite 8 passed; raw_http_has_request_line/headers/body >=1; wire_secret_count=0; net_probe violations>=1 and non_loopback_original_calls=0
+
+### Ordered verification (candidate — not R3B/R3 PASS)
+1. leader-first-exit + TERM-ignore + nonblocking fail-closed (r4_*): 8 passed
+2. rewritten main-agent + graph + e2e: 13 passed
+3. authenticity predicate mutation: 20 passed
+4. full raw HTTP + loopback wire: 8 passed
+5. all tests/test_r3b_*.py: 120 passed
+6. R3A specialty: 27 passed
+7. R2 main chain: 48 passed
+8. compileall credential_guard tests scripts: exit 0
+9. full pytest (this env): 1120 passed, 2 xfailed, 17 failed, 83 errors — all inspected failures/errors are OS-boundary PermissionError on [SENSITIVE_PATH_REDACTED] hermes-agent/venv/bin/python / release artifact paths (same class as prior R3B/R3A sandbox notes); not R3B process/wire logic regressions
+10. freeze (POSIX relative-path Unicode code-point sort; path:sha256:size\\n; excludes .venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256,.r3b-tdd-evidence.log): see below
+
+### Candidate freeze
+review_workspace_files: 250
+review_workspace_sha256_1: 34e18e5533f4b27437e5f0f4b080461a5219da4380588a80bb6da2a562a8779b
+review_workspace_sha256_2: 34e18e5533f4b27437e5f0f4b080461a5219da4380588a80bb6da2a562a8779b
+review_workspace_stable: True
+note: did not modify .r2-freeze-evidence.sha256 or .r3a-freeze-evidence.sha256
+prior_voided: feb900c45d3e56cd282d8e9b45bbe28e4b63ca1b517e2f8972475f873a686998
+
+status: Round4 blocker-fix CANDIDATE only — do not claim R3B/R3 PASS
+await: main-agent independent acceptance + three-way read-only review
+
+## Round 5 — final three blockers A–C (2026-08-04)
+
+scope: close three valid Round5 security-review blockers only; R3B remains CANDIDATE — do not claim R3B/R3 PASS
+voided_prior_freeze: 251 files 6fab534af767d64ebdd126ea9dce498486e39de9e9c7df1d6b9cd8dac7618a98
+production: credential_guard/adapters/process.py (expected_pgid=child_pid on Popen return; getpgid optional consistency)
+tests/scripts: test_r3b_process_adapter.py; test_r3b_wire_e2e.py; scripts/run_r3b_wire_e2e.py; test_r3b_evidence_authenticity_gate.py
+did_not_touch: CLAUDE.md HANDOVER.md R3A/R2 freeze sidecars; no R3C/R4/R5/R6; no R3B/R3 PASS claim
+
+### Blocker A — close Popen→first-getpgid leader-exit window
+RED: barrier delays first getpgid until leader exited + TERM-ignore descendant marked, then ESRCH; legacy getpgid-success-only save / capture-fail kill+wait leave orphan (test_r5_mutation_*)
+GREEN: first post-Popen statement establishes ProcessExecutionHandle(expected_pgid=child_pid); getpgid ESRCH retains contract pgid; cleanup always uses handle.pgid; mismatch → used_new_session=False fail-closed no killpg
+measured: barrier_fired; descendant dead; PGID gone; no PID/PGID/token in result
+
+### Blocker B — independent original bomb/spy under loopback audit
+RED: run_net_probe(guard_enabled=False) same runtime path → non_loopback_original_calls>0, loopback_only=False, test_net_blocked_before_original=False (no real non-loopback syscall)
+GREEN: two-layer install before Agent import — policy guard then bomb/spy wrapping saved originals; TEST-NET violations>=1 and non_loopback_original_calls==0; loopback_only derived (deleted violations>=0 tautology); env/stdin approve/deny retained
+measured: guard on/off runtime mutation via CG_NET_GUARD_ENABLED; bomb never executes non-loopback syscall
+
+### Blocker C — unified evidence completeness predicate receives mutations
+RED: validate_evidence_source(mutated_text, kind) non-empty for raw_requests/approval_raw rename, raw HTTP evidence delete, loopback_only constant, os.environ.copy; never re-assert original wire text as mutation evidence
+GREEN: validate_evidence_source / _missing_evidence_contracts / _scan_false_green shared; all formal carriers yield []
+measured: authenticity gate 21 passed
+
+### Ordered verification (candidate — not R3B/R3 PASS)
+1. pre-getpgid leader-exit + mutations (r5_*): 3 passed
+2. network bomb/spy + guard-disabled runtime mutation: 3 passed (plus wire suite)
+3. evidence completeness predicate mutations: 21 passed
+4. all Round5 blocker specialty: covered above
+5. all tests/test_r3b_*.py: 125 passed
+6. R3A specialty (transport+hygiene+main+e2e): 27 passed
+7. R2 main chain: 48 passed
+8. compileall credential_guard tests scripts: exit 0
+9. full pytest (this env): 1125 passed, 2 xfailed, 17 failed, 83 errors — all inspected failures/errors are OS-boundary PermissionError on [SENSITIVE_PATH_REDACTED] hermes-agent/venv/bin/python / release artifact paths (same class as prior R3B/R3A sandbox notes); not R3B process/wire logic regressions
+10. freeze (POSIX relative-path Unicode code-point sort; path:sha256:size\n; excludes .venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256,.r3b-tdd-evidence.log): see below
+
+### Candidate freeze
+review_workspace_files: 251
+review_workspace_sha256_1: 73e22da577ac780b3806d9045d58d139f7d1106f88d0dbe6c5344eae89f63b00
+review_workspace_sha256_2: 73e22da577ac780b3806d9045d58d139f7d1106f88d0dbe6c5344eae89f63b00
+review_workspace_stable: True
+note: did not modify .r2-freeze-evidence.sha256 or .r3a-freeze-evidence.sha256
+prior_voided: 6fab534af767d64ebdd126ea9dce498486e39de9e9c7df1d6b9cd8dac7618a98
+
+status: Round5 blocker-fix CANDIDATE only — do not claim R3B/R3 PASS
+await: main-agent independent acceptance + three-way read-only review
+
+## R3B final sign-off (2026-08-04)
+
+main_agent_non_sandbox:
+- R3B: 125 passed
+- R3A specialty: 27 passed
+- R2 main chain: 48 passed
+- full pytest: 1225 passed, 2 xfailed, 0 failed
+- compileall: exit 0
+- formal Hermes source: clean
+
+final_read_only_reviews:
+- Cursor: PASS
+- Hermes security boundary: PASS
+- Hermes evidence/freeze recovery: PASS
+
+security_closures:
+- Popen returns -> expected_pgid=child_pid before any getpgid; ESRCH retains contract PGID; TERM-ignore descendants cleared
+- independent socket policy guard + original primitive bomb/spy; guard-disabled runtime mutation reaches bomb without non-loopback syscall
+- formal and mutated evidence carriers use the same validate_evidence_source predicate
+- real PluginManager discovery/load and public AIAgent loopback wire evidence retained
+- Provider/approval/result synthetic-secret counts remain zero
+
+reviewed_technical_candidate:
+- files: 252
+- payload_bytes: 25657
+- sha256: f9eef16355baf7b1210eed3f11756fbead68c50f9e8a2efadef26844ded01952
+- reviewer recomputation: two identical sequential passes, max 5 open FDs under RLIMIT_NOFILE=256
+
+status: R3B PASS (2026-08-04); R3C may begin after administrative documents and final sidecar are aligned

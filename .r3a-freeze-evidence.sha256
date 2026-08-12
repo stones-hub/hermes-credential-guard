@@ -1,0 +1,5 @@
+R3A_FINAL_ADMINISTRATIVE_WORKSPACE_FILES=231
+R3A_FINAL_ADMINISTRATIVE_WORKSPACE_SHA256=02cf587ef9adec9f4299869ad699488de6308a443d73cfc2c9be731bb58ad879
+ALGORITHM=sorted POSIX relative-path strings (Unicode code-point order); each line path:sha256:size with trailing newline
+EXCLUDES=.venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256
+STABILITY=two consecutive computations identical

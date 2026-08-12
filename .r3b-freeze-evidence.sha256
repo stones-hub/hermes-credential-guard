@@ -1,0 +1,10 @@
+R3B_FINAL_ADMINISTRATIVE_WORKSPACE_FILES=253
+R3B_FINAL_ADMINISTRATIVE_WORKSPACE_SHA256=8141e6655b8ff67f2afd0b8ead3db5de11f6438e3cee9d8612bba14f66f6a868
+ALGORITHM=sorted POSIX relative-path strings (Unicode code-point order); each line path:sha256:len(bytes) with trailing newline
+EXCLUDES=.venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256
+STABILITY=two consecutive computations identical
+TECHNICAL_REVIEWED_CANDIDATE_FILES=252
+TECHNICAL_REVIEWED_CANDIDATE_SHA256=f9eef16355baf7b1210eed3f11756fbead68c50f9e8a2efadef26844ded01952
+POST_SIGNOFF_ADMIN_BACKFILL_FILES=252
+POST_SIGNOFF_ADMIN_BACKFILL_SHA256=f9ef59fbca1471a6f8f115fd166c62b1737cc54a26cf5a97bf745478617172af
+ADMINISTRATIVE_NOTE=final sign-off evidence and project status backfill changed only evidence/document inputs after all reviewers passed; subsequent R3C task-book creation added one in-scope file and produced the current administrative identity

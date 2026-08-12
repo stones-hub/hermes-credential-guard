@@ -1,0 +1,14 @@
+name: credential-guard
+version: 0.4.1
+description: Guard credentials from outbound model requests; logical references plus approved local HTTP/env/stdin injection
+provides_hooks:
+  - transform_tool_result
+  - pre_tool_call
+provides_middleware:
+  - llm_request
+  - llm_execution
+  - tool_request
+  - tool_execution
+provides_tools:
+  - http_credential_request
+  - credential_process_run

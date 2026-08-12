@@ -1,0 +1,3 @@
+name: credential-guard-test
+version: 0.1.0
+description: Test-only companion for canary injection and fault injection (never ship in production)

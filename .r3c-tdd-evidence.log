@@ -1,0 +1,351 @@
+# R3C strict TDD evidence log
+# Rules: no full synthetic decoy bodies; hosts redacted as [SYNTHETIC_HOST_REDACTED];
+# decoys as [SYNTHETIC_DECOY_REDACTED]; no Profile/SSH paths; no absolute helper program paths in claims.
+# CODING-SANDBOX CANDIDATE ONLY — does not claim R3/R3C PASS.
+# Awaiting main-agent independent acceptance and three-path final review.
+
+## Pre-work (2026-08-04)
+R3A/R3B already PASS (technical sign-off). R3C adds no fourth adapter.
+Read: CLAUDE.md, HANDOVER.md, docs/R3 §9–§11, .r3a/.r3b freeze sidecars + tdd logs.
+
+## Slice C1 — three adapters public AIAgent wire E2E
+
+### C1 RED
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3c_wire_e2e.py::test_r3c_wire_http_approve tests/test_r3c_wire_e2e.py::test_r3c_wire_script_cli_entrypoint
+exit_code: non-zero
+failure_mechanism: missing scripts/run_r3c_wire_e2e.py (AssertionError is_file / FileNotFoundError)
+result: RED accurate
+
+### C1 GREEN
+files: scripts/run_r3c_wire_e2e.py, tests/test_r3c_wire_e2e.py
+covers: one isolated HOME/HERMES_HOME; plugin copy; loopback OpenAI provider; fake HTTP target via transport override; env+stdin helpers; AIAgent.run_conversation for http/env/stdin approve+deny; http_timeout/env_mutate/stdin_timeout close; sys.setprofile order; PluginManager identity before/after; raw provider request-line/headers/body; approval raw; loopback socket guard+bomb/spy; zero secret in provider/approval/result
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3c_wire_e2e.py
+result: 15 passed (later 16 with provider_raw_request_count assert)
+
+### C1 mutation
+- drop adapter scenario token → authenticity gate RED
+- rename raw_requests / approval_raw / sys.setprofile → structural RED
+- guard_enabled=False net_probe → bomb hits, non_loopback_original_calls>0
+- remove guard install assignments → install gate RED
+result: mutations demonstrate RED as designed
+
+## Slice C2 — PluginManager graph + ordinary tool
+
+### C2 RED/GREEN
+files: tests/test_r3c_plugin_manager_graph.py
+covers: discover_plugins(force=True); no Ctx/deregister; handler from hermes_plugins.credential_guard; env+http approve identity unchanged; ordinary write_file-style tool once with approval=0 resolve=0 adapter=0
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3c_plugin_manager_graph.py
+result: 4 passed
+note: dual-credential config initially RED due to secret-uniqueness (same decoy reused); fixed with distinct HTTP decoy
+
+## Slice C3 — authenticity unified predicate
+
+### C3 RED/GREEN/mutation
+files: tests/test_r3c_evidence_authenticity_gate.py, scripts/run_r3c_e2e.py
+predicate: validate_r3c_evidence_source(text, kind)
+healthy carriers pass; mutations feed mutated text and fail for:
+cover/clear callback list; Ctx/deregister; hardcoded order/counts/zero/loopback;
+delete raw provider bytes; delete approval raw; delete one of three adapters;
+os.environ.copy; delete bomb/spy; internal middleware without AIAgent; exit0/hardcoded PASS
+result: gate suite green
+
+## Slice C4 — historical identity / scope
+
+### C4 RED/GREEN/mutation
+files: tests/test_r3c_historical_identity_gate.py
+covers: R3A sidecar historical ≠ live follower; R3B technical+administrative identities + exact ALGORITHM tags;
+R2 enumerator self-exclude + R3A/R3B EXCLUDES self; .r3c-freeze-evidence.sha256 must NOT exist yet + future self-exclude contract;
+0.3.1 dist frozen digests unchanged; no fourth adapter / shell=True / new backend;
+mutation rewrite R3A to live is detectable; algorithm tag mutation RED
+result: gate suite green
+
+## Ordered verification (coding-sandbox candidate — NOT R3/R3C PASS)
+
+### 1. R3C specialty
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3c_wire_e2e.py tests/test_r3c_plugin_manager_graph.py tests/test_r3c_evidence_authenticity_gate.py tests/test_r3c_historical_identity_gate.py
+result: 47 passed in 26.30s
+
+### 2. R3B 125
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3b_*.py (binding/identity/adapter/handler/main/e2e/graph/wire/authenticity/hygiene)
+result: 125 passed in 66.94s
+regression: none observed
+
+### 3. R3A 27
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3a_production_transport.py tests/test_r3a_evidence_hygiene.py tests/test_r3a_main_agent_path.py tests/test_r3a_e2e.py
+result: 27 passed in 4.99s
+regression: none observed
+
+### 4. R2 main chain 48
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r2_main_agent_path.py tests/test_r2_e2e.py tests/test_injection_toctou.py tests/test_r2_evidence_authenticity_gate.py
+result: 48 passed in 11.07s
+regression: none observed
+
+### 5. Full pytest (coding-sandbox environment)
+command: CREDENTIAL_GUARD_BUILD_PYTHON=/tmp/cg-build-py/bin/python .venv/bin/python -m pytest -q -p no:cacheprovider
+result: 1252 passed, 2 xfailed, 20 failed in 177.27s
+failure_class: ALL 20 are PermissionError on ~/.hermes or ~/.ssh path exists/stat under coding-sandbox macOS TCC/sandbox (WORKER_PROFILE, hermes-agent venv, ssh parent search, tool-injection spike HERMES_PYTHON).
+boundary note: task forbids reading ~/.hermes/~/.ssh; sandbox blocks even pathlib.exists().
+NOT an R3A/R3B functional regression: specialty suites above are green; arithmetic 1225(R3B full baseline)+47(R3C)=1272 == 1252 passed + 20 sandbox-blocked.
+AUTHORITATIVE full 0-failed result requires main-agent non-sandbox re-run.
+
+### 6. compileall
+command: .venv/bin/python -m compileall -q credential_guard scripts tests __init__.py
+exit_code: 0
+
+## Production scope check
+- No new adapter file (only http.py + process.py)
+- No shell=True added
+- No R3C credential backend
+- Did not write .r3c-freeze-evidence.sha256
+- Did not update CLAUDE.md / HANDOVER.md / 实施计划 to R3 PASS
+- Did not modify signed-off adapter security semantics to force green
+
+## Candidate freeze (external fixed algorithm; coding-sandbox)
+algorithm: sorted POSIX relative-path strings (Unicode code-point order); each line path:sha256:len(bytes) with trailing newline; SHA-256 of joined blob
+excludes: .venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256,.r3c-freeze-evidence.sha256,.r3c-tdd-evidence.log
+computation_1_files: 259
+computation_1_sha256: 65f52769c9b77972d4ac8e2aba657fedd37ad451a4686671b16163b49881633b
+computation_2_files: 259
+computation_2_sha256: 65f52769c9b77972d4ac8e2aba657fedd37ad451a4686671b16163b49881633b
+stable: True
+note: digest above was taken before this evidence log write; log is excluded from set. Main agent must recompute independently after review.
+
+## Files added/modified (candidate)
+- scripts/run_r3c_wire_e2e.py (new)
+- scripts/run_r3c_e2e.py (new)
+- tests/test_r3c_wire_e2e.py (new)
+- tests/test_r3c_plugin_manager_graph.py (new)
+- tests/test_r3c_evidence_authenticity_gate.py (new)
+- tests/test_r3c_historical_identity_gate.py (new)
+- .r3c-tdd-evidence.log (this file)
+
+## Verdict
+R3C candidate only，等待主代理独立验收与三路复审。
+Do NOT claim R3 PASS / R3C PASS from this log.
+
+## MAIN_AGENT_NON_SANDBOX_AUTHORITATIVE (Round2 开工前权威基线)
+
+NOTE: This block records the main-agent non-sandbox baseline provided for Round2
+start. It does NOT overwrite the coding-sandbox historical section above.
+Coding Agent MUST NOT present this block as Round2 final authoritative result;
+after Round2 fixes, main agent must re-run independently.
+
+baseline_label: Round2_pre_fix_authoritative
+R3C_specialty: 47 passed
+R3B_specialty: 125 passed
+R3A_specialty: 27 passed
+R2_main_chain: 48 passed
+full_pytest: 1272 passed / 2 xfailed / 0 failed
+compileall: exit 0
+formal_Hermes_source: clean (no coding-agent edits)
+sandbox_20_failures_note: the earlier coding-sandbox 20 PermissionError failures
+  (~/.hermes / ~/.ssh path exists/stat under macOS TCC/sandbox) are a historical
+  candidate permission-boundary result only; they are not the authoritative
+  functional count.
+
+## Round2 blocker close — coding-sandbox candidate (NOT R3/R3C PASS)
+
+Closed blockers from Cursor detailed review proc_6041614a5aa8:
+- B1: C4 allows technical-review sidecar (self-exclude + STATUS technical candidate/not PASS);
+  STATUS→PASS mutation RED; drop self-exclude RED; live tests/test_r3c_*.py green
+- B2: public AIAgent HTTP/env/stdin replay (two run_conversation, same session_id+tool_call_id);
+  resolve=1 adapter/start=1 then second closed via production plan/store RUNTIME_ADAPTER_NOT_READY
+- B3: approval timeout enters Hermes gateway timeout branch (timeout=0 + never-resolve notify);
+  approval_message distinct from deny; approval_is_timeout/approval_timeout_branch
+- B4: real enumerate HOME/HERMES_HOME trace/session carriers; trace_secret_count=0;
+  trace_artifact_count derived (not hardcoded)
+- B5: env_approve parent_env_secret_count=0; CG_PROBE_ENV absent; followup child whitelist → absent;
+  environ.copy / parent pollution mutation RED via authenticity predicate
+- B6: this MAIN_AGENT_NON_SANDBOX_AUTHORITATIVE baseline block appended (not Round2 final)
+- B7/S1: wire_script required fail-close tokens (deny/replay/mutate/timeout/trace/parent/followup);
+  C1/C3 mutations feed mutated text into validate_r3c_evidence_source
+- S2/S3: identity_unchanged derived (no constant True); graph covers HTTP/env/stdin;
+  ordinary_evidence_layer=middleware in graph; ordinary public AIAgent in wire
+- S4: http_target_evidence_layer=R3A_signed_transport_override_in_R3C_wire
+- S5: HTTP/stdin mutate + all three replays on public Agent
+
+### Round2 ordered verification (coding-sandbox candidate)
+1. sidecar live C4: 10 passed (historical identity gate)
+2. replay/timeout/mutate: covered in wire suite
+3. trace + parent/followup: covered in wire suite
+4. graph + ordinary: 5 passed (plugin manager graph)
+5. unified predicate: authenticity gate green (mutations feed mutated text)
+6. R3C specialty: 61 passed in ~48s
+7. R3B: 125 passed in 62.75s
+8. R3A: 27 passed in 4.54s
+9. R2 main chain: 48 passed in 11.11s
+10. full pytest (coding-sandbox): 1266 passed, 2 xfailed, 20 failed
+    failure_class: same sandbox PermissionError on ~/.hermes/~/.ssh (20);
+    arithmetic note: prior baseline 1252+20sandbox; Round2 adds 14 R3C tests → 1266+20
+    AUTHORITATIVE full 0-failed still requires main-agent non-sandbox re-run after Round2
+11. compileall: exit 0
+12. formal Hermes source: not modified by this Round2 coding task
+
+### Round2 candidate freeze (external fixed algorithm; coding-sandbox)
+algorithm: sorted POSIX relative-path strings (Unicode code-point order); each line path:sha256:len(bytes) with trailing newline; SHA-256 of joined blob
+excludes: .venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256,.r3c-freeze-evidence.sha256,.r3c-tdd-evidence.log
+computation_1_files: 260
+computation_1_sha256: 65e1cd42448e18167cef39c6049381c010ded064b7d11339edd333413c4b8a1a
+computation_2_files: 260
+computation_2_sha256: 65e1cd42448e18167cef39c6049381c010ded064b7d11339edd333413c4b8a1a
+stable: True
+note: digest taken before this evidence-log append; log excluded from set.
+Old technical-review sidecar 260/6e8d0f63… is obsolete after Round2 edits; main agent must re-freeze.
+
+## Round2 Verdict
+R3C Round2 candidate only，等待主代理非沙箱复验、重冻结和三路只读复审。
+Do NOT claim R3 PASS / R3C PASS from this log.
+
+## MAIN_AGENT_NON_SANDBOX_AUTHORITATIVE_ROUND2_FINAL
+
+This block records the main-agent non-sandbox authoritative Round2 final
+baseline BEFORE Round3 authenticity-blocker edits. Coding Agent MUST NOT
+present this block as Round3 final authoritative result; after Round3 fixes,
+main agent must re-run independently.
+
+baseline_label: MAIN_AGENT_NON_SANDBOX_AUTHORITATIVE_ROUND2_FINAL
+R3C_specialty: 61 passed
+R3B_specialty: 125 passed
+R3A_specialty: 27 passed
+R2_main_chain: 48 passed
+full_pytest: 1286 passed / 2 xfailed / 0 failed
+compileall: exit 0
+formal_Hermes_source: clean (no coding-agent edits)
+
+historical_non_authoritative_notes:
+- old pre-fix baseline 47/1272 is historical only; not Round2 final
+- coding-sandbox 20 PermissionError failures (~/.hermes / ~/.ssh under macOS
+  TCC/sandbox) are historical/non-Round2-final candidate permission-boundary
+  results only; they are not the authoritative functional count
+
+authority_scope: Round3开工前权威基线（Round2 final）. Round3 修改后仍需主代理
+重新跑；编码 Agent 不得冒充 Round3 最终权威结果.
+
+## Round3 authenticity blockers — coding-sandbox candidate (NOT R3/R3C PASS)
+
+Closed blockers from Hermes dual final review (deleg_312636e5):
+- A: same-turn replay — one public AIAgent.run_conversation; fake provider
+  re-issues same tool_call_id+args in-turn; mechanical tool_request_identities
+  (session_id, turn_id, tool_call_id, args_digest) equal; resolve/adapter/start
+  once then second deltas=0 via production store/tombstone
+- B: immutable host_approval_raw deep-copy; no setdefault/append timeout text;
+  approval_timeout_branch only from await_gateway_call_count>0 AND host message
+  containing real timeout wording; observation fields separate from host raw
+- C: full carrier scan includes *.db-wal/*.db-shm and session JSONL; exact-exclude
+  only credential-guard.json secret store + plugins/helpers; inventory path/kind/bytes
+- D: fixed synthetic canaries in PROBE (no CG_DECOY_* env ferry); full parent
+  os.environ scan with zero exclusions; follow-up child minimal whitelist → absent
+- E: formal plugin.yaml declares credential_process_run; install is byte-copy only;
+  manifest_bytes_identical + four tools match registry; temp patch removed
+- F: this MAIN_AGENT_NON_SANDBOX_AUTHORITATIVE_ROUND2_FINAL block appended
+
+### Round3 ordered verification (coding-sandbox candidate)
+1. same-turn replay three adapters + mutations: covered in wire + authenticity gate
+2. immutable host timeout raw + mutations: covered
+3. trace sidecars/carriers positive+negative: covered (state.db/.db-wal/.db-shm + JSONL)
+4. full parent env + follow-up: covered; canary implant mutation RED
+5. manifest byte-identical + mutation: covered
+6. unified authenticity predicate formal + mutations: green
+7. R3C specialty: 68 passed in ~50s (61 Round2 + Round3 authenticity tests)
+8. R3B: 125 passed in 62.71s
+9. R3A: 27 passed in 4.65s
+10. R2 main chain: 48 passed in 11.09s
+11. full pytest (coding-sandbox): 1193 passed, 2 xfailed, 17 failed, 83 errors
+    failure_class: sandbox PermissionError on ~/.hermes / ~/.ssh (and related
+    reproducible-release paths touching formal Profile/venv); NOT functional RED
+    AUTHORITATIVE full 0-failed still requires main-agent non-sandbox re-run after Round3
+12. compileall: exit 0
+13. formal Hermes source: not modified by this Round3 coding task
+
+### Round3 candidate freeze (external fixed algorithm; coding-sandbox)
+algorithm: sorted POSIX relative-path strings (Unicode code-point order); each line path:sha256:len(bytes) with trailing newline; SHA-256 of joined blob
+excludes: .venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256,.r3c-freeze-evidence.sha256,.r3c-tdd-evidence.log
+computation_1_files: 261
+computation_1_sha256: 5be856270b1c778f763a6c9e963662d7cbbdc4eebc0ddb687a564a0ff3ffa017
+computation_2_files: 261
+computation_2_sha256: 5be856270b1c778f763a6c9e963662d7cbbdc4eebc0ddb687a564a0ff3ffa017
+stable: True
+note: digest taken before this evidence-log append; log excluded from set.
+Old freeze 261/5a7d7c33… (task baseline) and Round2 260/65e1cd42… are obsolete after Round3 edits; main agent must re-freeze. Do NOT update .r3c-freeze-evidence.sha256 in this coding task.
+
+## Round3 Verdict
+R3C Round3 candidate only，等待主代理非沙箱复验、重冻结和三路只读复审。
+Do NOT claim R3 PASS / R3C PASS from this log.
+
+## MAIN_AGENT_NON_SANDBOX_AUTHORITATIVE_ROUND3_FINAL
+
+R3C_specialty: 68 passed
+R3B_specialty: 125 passed
+R3A_specialty: 27 passed
+R2_main_chain: 48 passed
+full_pytest: 1293 passed / 2 xfailed / 0 failed
+compileall: exit 0
+formal_Hermes_source: clean
+history_note: Round3 coding-sandbox PermissionError results are historical candidate boundary results only; this is the main-agent non-sandbox Round3 final verification before final read-only review.
+status: verification evidence only; R3/R3C remains not PASS until all three final read-only reviewers explicitly PASS.
+
+## Round4 load-bearing mutations — coding-sandbox candidate (NOT R3/R3C PASS)
+
+Closed unified-predicate blocker from authenticity review (deleg_02b6c240):
+`validate_r3c_evidence_source(..., "wire_script")` previously returned [] for three
+directed in-memory mutations of the formal run_r3c_wire_e2e.py carrier.
+
+### RED mechanism (accurate; not token-deletion / syntax-break)
+1. second replay tool_call_id ≠ first → must hit mutation:second_tool_call_id_changed
+2. second replay args ≠ first → must hit mutation:second_args_changed
+3. bypass real approval_mod._await_gateway_decision code-label mapping (or forge
+   await_gateway_call_count / drop await_gateway_call_count>0 from
+   approval_timeout_branch) while retaining host timeout wording → must hit
+   mutation:host_await_bypassed_with_timeout_text
+
+### GREEN (mechanical load-bearing)
+- PROBE replay: explicit first_tool_call_id / first_serialized_args bind; second
+  function payload reuses those Names; runtime still proven by tool_request_identities
+- Predicate extracts PROBE AST: second-issuance tool_calls id/arguments must be
+  Name(first_tool_call_id) / Name(first_serialized_args)
+- Predicate checks real approval_mod._await_gateway_decision enters code_labels;
+  await_gateway_call_count += 1 only under label == "_await_gateway_decision";
+  approval_timeout_branch AND-includes await_gateway_call_count > 0 and
+  host_timeout_text; constant forge of await_gateway_call_count also RED
+- Reverse protection: unrelated comment/formatting does not trip the three hits
+
+### Round4 ordered verification (coding-sandbox candidate)
+1. three load-bearing mutations + reverse protection: PASS
+2. authenticity gate: 25 passed
+3. R3C specialty: 72 passed in ~52.5s (68 Round3 + 4 Round4 tests)
+4. R3B: 125 passed in 60.95s
+5. R3A: 27 passed in 4.69s
+6. R2 main chain: 48 passed in 10.81s
+7. full pytest (coding-sandbox): 1197 passed, 2 xfailed, 17 failed, 83 errors
+   failure_class: sandbox PermissionError on ~/.hermes / ~/.ssh (and related
+   reproducible-release paths touching formal Profile/venv); NOT functional RED
+   AUTHORITATIVE full 0-failed still requires main-agent non-sandbox re-run after Round4
+8. compileall: exit 0
+9. formal Hermes source: not modified by this Round4 coding task
+
+### Round4 candidate freeze (external fixed algorithm; coding-sandbox)
+algorithm: sorted POSIX relative-path strings (Unicode code-point order); each line path:sha256:len(bytes) with trailing newline; SHA-256 of joined blob
+excludes: .venv,__pycache__,dist,.git,.pytest_cache,eggs,.eggs,build,*.pyc,.r2-freeze-evidence.sha256,.r3a-freeze-evidence.sha256,.r3b-freeze-evidence.sha256,.r3c-freeze-evidence.sha256,.r3c-tdd-evidence.log
+computation_1_files: 262
+computation_1_sha256: 84ae974888d9bba85ad31f07bb96980a91a1d919cd00ec12089760ec35ec53d0
+computation_2_files: 262
+computation_2_sha256: 84ae974888d9bba85ad31f07bb96980a91a1d919cd00ec12089760ec35ec53d0
+stable: True
+note: digest taken before this evidence-log append; log excluded from set.
+Old freeze 262/21c2503d… (Round3 task baseline) is obsolete after Round4 edits; main agent must re-freeze. Do NOT update .r3c-freeze-evidence.sha256 in this coding task.
+
+## Round4 Verdict
+R3C Round4 candidate only，等待主代理非沙箱复验、重冻结和三路最终只读复审。
+Do NOT claim R3 PASS / R3C PASS from this log.
+
+## MAIN_AGENT_NON_SANDBOX_AUTHORITATIVE_ROUND4_FINAL
+
+R3C_authenticity_and_wire: 57 passed
+R3C_specialty: 72 passed
+R3B_specialty: 125 passed
+R3A_specialty: 27 passed
+R2_main_chain: 48 passed
+full_pytest: 1297 passed / 2 xfailed / 0 failed
+compileall: exit 0
+formal_Hermes_source: clean
+status: verification evidence only; R3/R3C remains not PASS until all three final read-only reviewers explicitly PASS on the refrozen candidate.

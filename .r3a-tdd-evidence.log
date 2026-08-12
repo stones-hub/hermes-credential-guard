@@ -1,0 +1,1240 @@
+# R3A strict TDD evidence log
+# Rules: no full synthetic decoy bodies; hosts redacted as [SYNTHETIC_HOST_REDACTED]; decoys as [SYNTHETIC_DECOY_REDACTED]; no local sensitive paths.
+
+## Pre-work freeze (2026-08-03)
+algorithm: review workspace relative_path:sha256:size\\n then SHA-256
+review_workspace_files: 213
+review_workspace_sha256: 8b4888e82767aa6d3d8c06308718f7035c204fc201d6bc628dffd9583f181c42
+review_workspace_stable: True (two consecutive computations)
+candidate_manifest_sha256: 04777ac4e17924fe4b765ef3cd75d3db96e29487a92027846b187732d9916209
+candidate_stable: True
+note: did not modify .r2-freeze-evidence.sha256
+
+## Baseline (must be 37 passed)
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r2_main_agent_path.py tests/test_r2_e2e.py tests/test_injection_toctou.py
+exit_code: 0
+result: 37 passed in 39.84s
+
+## Slice A1 start
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_a1_http_binding_accepts_exact_allowed_methods_and_paths _________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1255/test_a1_http_binding_accepts_e0')
+
+    def test_a1_http_binding_accepts_exact_allowed_methods_and_paths(tmp_path: Path):
+        """Minimal GREEN target for A1: request allowlists are first-class schema."""
+        decoy = _decoy()
+        path = _write(tmp_path / CONFIG_FILENAME, _http_doc(decoy))
+>       cfg = CredentialGuardConfig.load(path)
+
+tests/test_r3a_http_binding_schema.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+credential_guard/config.py:409: in load
+    return cls(data)
+credential_guard/config.py:348: in __init__
+    credentials, bindings = parse_config_document(data)
+credential_guard/config.py:185: in parse_config_document
+    bindings[name] = validate_binding(name, entry, credentials)
+credential_guard/bindings.py:165: in validate_binding
+    return _validate_http(name, entry, credentials)
+credential_guard/bindings.py:208: in _validate_http
+    _require_fields(entry, _HTTP_FIELDS)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+entry = {'approval': 'required', 'credential_ref': 'jenkins-token', 'inject': {'location': 'authorization_header', 'type': 'bearer'}, 'request': {'allowed_methods': ['POST'], 'allowed_paths': ['/job/project-x/build']}, ...}
+allowed = frozenset({'approval', 'credential_ref', 'inject', 'target', 'type'})
+
+    def _require_fields(entry: Mapping[str, Any], allowed: frozenset) -> None:
+        from .config import ConfigError
+    
+        if set(entry) - allowed:
+>           raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+E           credential_guard.config.ConfigError: invalid configuration
+
+credential_guard/bindings.py:179: ConfigError
+=========================== short test summary info ============================
+FAILED tests/test_r3a_http_binding_schema.py::test_a1_http_binding_accepts_exact_allowed_methods_and_paths
+1 failed in 0.04s
+.                                                                        [100%]
+1 passed in 0.02s
+..                                                                       [100%]
+2 passed in 0.02s
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_a1_binding_and_target_digests_cover_execution_fields ___________
+
+isolated_runtime = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1258/test_a1_binding_and_target_dig0/hermes/credential-guard')
+
+    def test_a1_binding_and_target_digests_cover_execution_fields(isolated_runtime: Path):
+        """Digests must bind real target + allowlists + inject + limits; meta must scrub host."""
+        decoy = _decoy()
+        path = _write(isolated_runtime / CONFIG_FILENAME, _http_doc(decoy))
+>       view = rc.publish_from_path(path)
+E       AttributeError: module 'credential_guard.runtime_config' has no attribute 'publish_from_path'
+
+tests/test_r3a_http_binding_schema.py:110: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_r3a_http_binding_schema.py::test_a1_binding_and_target_digests_cover_execution_fields
+1 failed in 0.03s
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_a1_binding_and_target_digests_cover_execution_fields ___________
+
+isolated_runtime = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1259/test_a1_binding_and_target_dig0/hermes/credential-guard')
+
+    def test_a1_binding_and_target_digests_cover_execution_fields(isolated_runtime: Path):
+        """Digests must bind real target + allowlists + inject + limits; meta must scrub host."""
+        decoy = _decoy()
+        _write(isolated_runtime / CONFIG_FILENAME, _http_doc(decoy))
+        view = rc.load_and_publish_runtime()
+        meta = view.bindings["jenkins-production"]
+        # Safety: host never appears in scrubbed meta keys/values exposed for match/approval.
+        blob = json.dumps(
+            {k: meta[k] for k in meta if k not in ("binding_digest", "target_digest")},
+            sort_keys=True,
+            default=str,
+        )
+        assert "[SYNTHETIC_HOST_REDACTED]" not in blob
+        assert "host" not in meta
+    
+        base_binding = meta["binding_digest"]
+        base_target = meta["target_digest"]
+        assert len(base_binding) == 64 and len(base_target) == 64
+    
+        # Mutate host → target_digest must change.
+        doc2 = _http_doc(decoy)
+        doc2["bindings"]["jenkins-production"]["target"]["host"] = "[SYNTHETIC_HOST_REDACTED]"
+        _write(isolated_runtime / CONFIG_FILENAME, doc2)
+        rc.reset_runtime_for_tests()
+        meta2 = rc.load_and_publish_runtime().bindings["jenkins-production"]
+>       assert meta2["target_digest"] != base_target
+E       AssertionError: assert '4f586cbfd5e12d415a71f29f09501170d9f5b7fdec83bc1b3cda85ff6c260671' != '4f586cbfd5e12d415a71f29f09501170d9f5b7fdec83bc1b3cda85ff6c260671'
+
+tests/test_r3a_http_binding_schema.py:131: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_r3a_http_binding_schema.py::test_a1_binding_and_target_digests_cover_execution_fields
+1 failed in 0.03s
+.                                                                        [100%]
+1 passed in 0.02s
+...............                                                          [100%]
+15 passed, 2 deselected in 0.03s
+........................................................................ [ 52%]
+.................................................................        [100%]
+137 passed in 0.28s
+.................F                                                       [100%]
+=================================== FAILURES ===================================
+_________ test_a1_mutation_dropping_target_host_from_digest_would_fail _________
+
+isolated_runtime = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1263/test_a1_mutation_dropping_targ0/hermes/credential-guard')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x102224640>
+
+    def test_a1_mutation_dropping_target_host_from_digest_would_fail(
+        isolated_runtime: Path, monkeypatch
+    ):
+        """Negative/mutation: if target_digest ignores host, host swap must still be detected as RED intent."""
+        decoy = _decoy()
+        _write(isolated_runtime / CONFIG_FILENAME, _http_doc(decoy))
+        meta1 = rc.load_and_publish_runtime().bindings["jenkins-production"]
+    
+        # Monkeypatch digest builder to omit host — simulating a weakened gate.
+        real = rc._freeze_binding_meta
+    
+        def weak_freeze(bindings):
+            view = real(bindings)
+            # Rebuild target digests without host to demonstrate the mutation hazard.
+            import hashlib
+            import json
+            from types import MappingProxyType
+    
+            rebuilt = {}
+            for name, meta in view.items():
+                weak = dict(meta)
+                payload = {
+                    "name": name,
+                    "credential_ref": meta.get("credential_ref"),
+                    "type": meta.get("type"),
+                }
+                raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+                weak["target_digest"] = hashlib.sha256(raw.encode()).hexdigest()
+                rebuilt[name] = MappingProxyType(weak)
+            return MappingProxyType(rebuilt)
+    
+        monkeypatch.setattr(rc, "_freeze_binding_meta", weak_freeze)
+        rc.reset_runtime_for_tests()
+        doc2 = _http_doc(decoy)
+        doc2["bindings"]["jenkins-production"]["target"]["host"] = "[SYNTHETIC_HOST_REDACTED]"
+        _write(isolated_runtime / CONFIG_FILENAME, doc2)
+        meta2 = rc.load_and_publish_runtime().bindings["jenkins-production"]
+        # Weak digest would keep target_digest equal across host swap — assert that hazard exists
+        # when gate is weakened, proving the production gate's necessity.
+>       assert meta2["target_digest"] == meta1["target_digest"]
+E       AssertionError: assert '4f586cbfd5e1...a85ff6c260671' == 'f7cc45f6250d...6aa466dcc7684'
+E         
+E         - f7cc45f6250d32b5a8c65178cf9b602b3fd24c5934120147cb86aa466dcc7684
+E         + 4f586cbfd5e12d415a71f29f09501170d9f5b7fdec83bc1b3cda85ff6c260671
+
+tests/test_r3a_http_binding_schema.py:302: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_r3a_http_binding_schema.py::test_a1_mutation_dropping_target_host_from_digest_would_fail
+1 failed, 17 passed in 0.05s
+..................................................                       [100%]
+50 passed in 9.56s
+..................                                                       [100%]
+18 passed in 0.04s
+--- A1 COMPLETE ---
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_a2_resolve_one_token_notes_injection_not_registry_count _________
+
+isolated_runtime = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1266/test_a2_resolve_one_token_note0/hermes/credential-guard')
+
+    def test_a2_resolve_one_token_notes_injection_not_registry_count(isolated_runtime: Path):
+        """First A2 RED: resolve_one_for_execution must exist and count injection resolves separately."""
+>       from credential_guard import injection as inj
+E       ImportError: cannot import name 'injection' from 'credential_guard' (/Users/yelei/data/code/repos/hermes-credential-guard/credential_guard/__init__.py)
+
+tests/test_r3_injection_core.py:100: ImportError
+=========================== short test summary info ============================
+FAILED tests/test_r3_injection_core.py::test_a2_resolve_one_token_notes_injection_not_registry_count
+1 failed in 0.03s
+.                                                                        [100%]
+1 passed in 0.02s
+....                                                                     [100%]
+4 passed in 0.03s
+--- A2 COMPLETE ---
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________________ test_a3_bearer_inject_via_fake_transport ___________________
+
+isolated_runtime = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1269/test_a3_bearer_inject_via_fake0/hermes/credential-guard')
+
+    def test_a3_bearer_inject_via_fake_transport(isolated_runtime: Path):
+        """Minimal A3 RED: adapter builds URL from binding + relative path and injects Bearer."""
+>       from credential_guard.adapters import http as http_adapter
+E       ImportError: cannot import name 'http' from 'credential_guard.adapters' (unknown location)
+
+tests/test_r3_http_adapter.py:106: ImportError
+=========================== short test summary info ============================
+FAILED tests/test_r3_http_adapter.py::test_a3_bearer_inject_via_fake_transport
+1 failed in 0.03s
+.                                                                        [100%]
+1 passed in 0.02s
+............                                                             [100%]
+12 passed in 0.03s
+.                                                                        [100%]
+1 passed in 0.03s
+--- A3 COMPLETE ---
+
+==================================== ERRORS ====================================
+______________ ERROR collecting tests/test_r3a_handler_wiring.py _______________
+ImportError while importing test module '/Users/yelei/data/code/repos/hermes-credential-guard/tests/test_r3a_handler_wiring.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/__init__.py:127: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_r3a_handler_wiring.py:25: in <module>
+    from credential_guard.tool_execution import (
+E   ImportError: cannot import name 'get_http_adapter_invoke_count' from 'credential_guard.tool_execution' (/Users/yelei/data/code/repos/hermes-credential-guard/credential_guard/tool_execution.py)
+=========================== short test summary info ============================
+ERROR tests/test_r3a_handler_wiring.py
+1 error in 0.03s
+ERROR: found no collectors for /Users/yelei/data/code/repos/hermes-credential-guard/tests/test_r3a_handler_wiring.py::test_a4_approve_resolves_and_runs_adapter_once
+
+..                                                                       [100%]
+2 passed in 0.02s
+.......FF.F                                                              [100%]
+=================================== FAILURES ===================================
+_________________________ test_toctou_replay_consumed __________________________
+
+env = {'canary': '[SYNTHETIC_DECOY_REDACTED]', 'store': PosixPath('/private/var/folders/lg/drxkydpx79v63vynv...est-1274/test_toctou_replay_consumed0/hermes/credential-guard'), 'token': '[SYNTHETIC_DECOY_REDACTED]'}
+
+    def test_toctou_replay_consumed(env):
+        token = env["token"]
+        args = _ready("tc-replay")
+        out1, calls1 = _exec(args, tc="tc-replay")
+>       _assert_blocked(out1, calls1, token)
+
+tests/test_injection_toctou.py:228: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = '{"error":"HTTP_ADAPTER_FAILED","ok":false,"source":"credential-guard"}'
+calls = [{'credential': '<CREDENTIAL:jenkins-token>', 'method': 'POST', 'path': '/job/project-x/build', 'target': 'jenkins-production'}]
+canary = '[SYNTHETIC_DECOY_REDACTED]'
+
+    def _assert_blocked(out: str, calls: List[Any], canary: str) -> None:
+        # Host next_call may run once to reach the formal handler; no secret leak.
+        assert len(calls) <= 1
+        assert canary not in out
+        data = json.loads(out)
+>       assert data["error"] == RUNTIME_ADAPTER_NOT_READY
+E       AssertionError: assert 'HTTP_ADAPTER_FAILED' == 'RUNTIME_ADAPTER_NOT_READY'
+E         
+E         - RUNTIME_ADAPTER_NOT_READY
+E         + HTTP_ADAPTER_FAILED
+
+tests/test_injection_toctou.py:153: AssertionError
+___________________ test_toctou_concurrent_only_one_consumes ___________________
+
+env = {'canary': '[SYNTHETIC_DECOY_REDACTED]', 'store': PosixPath('/private/var/folders/lg/drxkydpx79v63vynv...-1274/test_toctou_concurrent_only_on0/hermes/credential-guard'), 'token': '[SYNTHETIC_DECOY_REDACTED]'}
+
+    def test_toctou_concurrent_only_one_consumes(env):
+        token = env["token"]
+        args = _ready("tc-conc")
+        barrier = threading.Barrier(2)
+        results: List[str] = []
+        lock = threading.Lock()
+    
+        def worker():
+            barrier.wait(timeout=5)
+            out, calls = _exec(args, tc="tc-conc")
+            with lock:
+                results.append(out)
+                assert len(calls) <= 1
+    
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+        assert len(results) == 2
+        for out in results:
+>           _assert_blocked(out, [], token)
+
+tests/test_injection_toctou.py:255: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = '{"error":"HTTP_ADAPTER_FAILED","ok":false,"source":"credential-guard"}'
+calls = [], canary = '[SYNTHETIC_DECOY_REDACTED]'
+
+    def _assert_blocked(out: str, calls: List[Any], canary: str) -> None:
+        # Host next_call may run once to reach the formal handler; no secret leak.
+        assert len(calls) <= 1
+        assert canary not in out
+        data = json.loads(out)
+>       assert data["error"] == RUNTIME_ADAPTER_NOT_READY
+E       AssertionError: assert 'HTTP_ADAPTER_FAILED' == 'RUNTIME_ADAPTER_NOT_READY'
+E         
+E         - RUNTIME_ADAPTER_NOT_READY
+E         + HTTP_ADAPTER_FAILED
+
+tests/test_injection_toctou.py:153: AssertionError
+__________ test_p5_egress_generation_bump_is_not_r2_security_binding ___________
+
+env = {'canary': '[SYNTHETIC_DECOY_REDACTED]', 'store': PosixPath('/private/var/folders/lg/drxkydpx79v63vynv...-1274/test_p5_egress_generation_bump0/hermes/credential-guard'), 'token': '[SYNTHETIC_DECOY_REDACTED]'}
+
+    def test_p5_egress_generation_bump_is_not_r2_security_binding(env):
+        """R1B republish may bump generation; R2 security uses file identity + digests."""
+        from credential_guard.runtime_config import load_and_publish_runtime
+    
+        args = _ready("tc-gen")
+        # Bump observational generation without changing the config file.
+        v1 = load_and_publish_runtime()
+        v2 = load_and_publish_runtime()
+        assert v2.generation > v1.generation
+        out, calls = _exec(args, tc="tc-gen")
+        # Still reaches adapter-not-ready consume path (not identity mismatch).
+        assert len(calls) == 1
+        data = json.loads(out)
+>       assert data["error"] == RUNTIME_ADAPTER_NOT_READY
+E       AssertionError: assert 'HTTP_ADAPTER_FAILED' == 'RUNTIME_ADAPTER_NOT_READY'
+E         
+E         - RUNTIME_ADAPTER_NOT_READY
+E         + HTTP_ADAPTER_FAILED
+
+tests/test_injection_toctou.py:283: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_injection_toctou.py::test_toctou_replay_consumed - Assertio...
+FAILED tests/test_injection_toctou.py::test_toctou_concurrent_only_one_consumes
+FAILED tests/test_injection_toctou.py::test_p5_egress_generation_bump_is_not_r2_security_binding
+3 failed, 8 passed in 0.07s
+...........F......F.......FF....................                         [100%]
+=================================== FAILURES ===================================
+__________ test_main_agent_approve_reaches_handler_adapter_not_ready ___________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1275/test_main_agent_approve_reache0')
+
+    def test_main_agent_approve_reaches_handler_adapter_not_ready(tmp_path):
+        data = _run("approve", tmp_path)
+        assert data["counts"]["tool_request"] == 1
+        assert data["counts"]["tool_execution"] == 1
+        assert data["counts"]["pre_tool_call"] == 1
+        assert data["counts"]["approval_gate"] == 1
+        assert data["counts"]["handler"] == 1
+        assert data["order"] == [
+            "tool_request",
+            "tool_execution",
+            "pre_tool_call",
+            "approval_gate",
+            "handler",
+        ]
+>       assert data["adapter_not_ready"] is True
+E       assert False is True
+
+tests/test_r2_main_agent_path.py:451: AssertionError
+___________________ test_main_agent_replay_no_second_consume ___________________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1275/test_main_agent_replay_no_seco0')
+
+    def test_main_agent_replay_no_second_consume(tmp_path):
+        data = _run("replay", tmp_path)
+        assert data["counts"]["handler"] >= 1
+        assert data["plan_state"] in ("consumed", "invalidated", None)
+        assert data["secret_resolve_delta"] == 0
+>       assert RUNTIME_ADAPTER_NOT_READY in data["result_preview"]
+E       assert 'RUNTIME_ADAPTER_NOT_READY' in '{"error":"HTTP_ADAPTER_FAILED","ok":false,"source":"credential-guard"}'
+
+tests/test_r2_main_agent_path.py:513: AssertionError
+______________________ test_e2e_approve_adapter_not_ready ______________________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1275/test_e2e_approve_adapter_not_r0')
+
+    def test_e2e_approve_adapter_not_ready(tmp_path):
+        data = _run("approve", tmp_path)
+        assert data["tool_execution_entered"] is True
+>       assert data["adapter_not_ready"] is True
+E       assert False is True
+
+tests/test_r2_e2e.py:85: AssertionError
+______________________ test_e2e_main_agent_framework_path ______________________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1275/test_e2e_main_agent_framework_0')
+
+    def test_e2e_main_agent_framework_path(tmp_path):
+        """Framework E2E: real tool_executor main-agent order (not backup dispatcher)."""
+        from tests.test_r2_main_agent_path import _run as _main_run
+    
+        data = _main_run("approve", tmp_path)
+        assert data["order"] == [
+            "tool_request",
+            "tool_execution",
+            "pre_tool_call",
+            "approval_gate",
+            "handler",
+        ]
+        assert data["counts"]["handler"] == 1
+>       assert data["adapter_not_ready"] is True
+E       assert False is True
+
+tests/test_r2_e2e.py:120: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_r2_main_agent_path.py::test_main_agent_approve_reaches_handler_adapter_not_ready
+FAILED tests/test_r2_main_agent_path.py::test_main_agent_replay_no_second_consume
+FAILED tests/test_r2_e2e.py::test_e2e_approve_adapter_not_ready - assert Fals...
+FAILED tests/test_r2_e2e.py::test_e2e_main_agent_framework_path - assert Fals...
+4 failed, 44 passed in 38.99s
+...................................F...                                  [100%]
+=================================== FAILURES ===================================
+_______________________ test_e2e_distinguishes_surfaces ________________________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1276/test_e2e_distinguishes_surface0')
+
+    def test_e2e_distinguishes_surfaces(tmp_path):
+        data = _run("approve", tmp_path)
+        assert data["fake_provider"] is False
+        assert data.get("provider_wire_included") is False
+        assert data.get("provider_wire_deferred_to") == "R1B"
+        assert data["worker_fingerprint_skipped"] is True
+>       assert data["r3_injection_implemented"] is False
+E       assert True is False
+
+tests/test_r2_e2e.py:199: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_r2_e2e.py::test_e2e_distinguishes_surfaces - assert True is...
+1 failed, 38 passed in 39.04s
+.F...F...........................F...F..F.........                       [100%]
+=================================== FAILURES ===================================
+_______________ test_a_register_includes_http_credential_request _______________
+
+    def test_a_register_includes_http_credential_request():
+        from credential_guard.reference_tools import (
+            check_http_credential_request_available,
+            handle_http_credential_request,
+            http_credential_request_schema,
+        )
+    
+        ctx = RecordingCtx()
+        register(ctx)
+        names = {t["name"] for t in ctx.tools}
+        assert HTTP_REFERENCE_TOOL in names
+        assert "http_credential_request" in names
+        tool = next(t for t in ctx.tools if t["name"] == HTTP_REFERENCE_TOOL)
+        assert tool["handler"] is handle_http_credential_request
+        assert tool["check_fn"] is check_http_credential_request_available
+        assert tool["schema"] == http_credential_request_schema()
+        assert tool["schema"]["parameters"]["additionalProperties"] is False
+        assert set(tool["schema"]["parameters"]["required"]) == {
+            "target",
+            "method",
+            "path",
+            "credential",
+        }
+        desc = tool.get("description") or tool["schema"].get("description") or ""
+        assert "逻辑引用" in desc or "logical reference" in desc.lower()
+>       assert "R3" in desc
+E       AssertionError: assert 'R3' in '逻辑引用请求外壳：提交业务目标、HTTP method/path 与 <CREDENTIAL:name> 引用；须经人工审批；批准后仅在本机结构化 HTTP 适配器中短暂注入，模型拿不到真值。'
+
+tests/test_http_reference_tool.py:121: AssertionError
+_______________ test_a_hermes_dispatch_approve_adapter_not_ready _______________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1277/test_a_hermes_dispatch_approve0')
+
+    def test_a_hermes_dispatch_approve_adapter_not_ready(tmp_path):
+        data = _run_hermes_probe("approve", tmp_path)
+        assert data["order"] == [
+            "tool_request",
+            "pre_tool_call",
+            "approval_gate",
+            "tool_execution",
+        ]
+        # Backup dispatcher: next_call reaches formal handler (counted as local
+        # boundary, not R3 downstream inject).
+        assert data["downstream"] == 1
+>       assert data["adapter_not_ready"] is True
+E       assert False is True
+
+tests/test_http_reference_tool.py:385: AssertionError
+_______________ test_d2_reference_consumes_and_adapter_not_ready _______________
+
+env = (PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1277/test_d2_reference_con.../hermes/credential-guard'), '[SYNTHETIC_DECOY_REDACTED]', <module 'tools.approval'>, <module 'hermes_cli.config'>)
+
+    def test_d2_reference_consumes_and_adapter_not_ready(env):
+        _, token, _, _ = env
+        args = _ref_args()
+        _analyze(tc="tc-exec")
+        assert (
+            on_pre_tool_call(
+                tool_name=HTTP_REFERENCE_TOOL,
+                args=args,
+                session_id="s1",
+                turn_id="t1",
+                tool_call_id="tc-exec",
+            )["action"]
+            == "approve"
+        )
+        out = on_tool_execution(
+            HTTP_REFERENCE_TOOL,
+            args,
+            _handler_next,
+            session_id="s1",
+            turn_id="t1",
+            tool_call_id="tc-exec",
+        )
+        data = json.loads(out)
+>       assert data["error"] == RUNTIME_ADAPTER_NOT_READY
+E       AssertionError: assert 'HTTP_ADAPTER_FAILED' == 'RUNTIME_ADAPTER_NOT_READY'
+E         
+E         - RUNTIME_ADAPTER_NOT_READY
+E         + HTTP_ADAPTER_FAILED
+
+tests/test_reference_approval.py:333: AssertionError
+___________ test_p6_tool_execution_must_not_touch_credential_secrets ___________
+
+env = (PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1277/test_p6_tool_executio.../hermes/credential-guard'), '[SYNTHETIC_DECOY_REDACTED]', <module 'tools.approval'>, <module 'hermes_cli.config'>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x104045a90>
+
+    def test_p6_tool_execution_must_not_touch_credential_secrets(env, monkeypatch):
+        """P6 RED: R2 execution recheck must not read credential values."""
+        from credential_guard import runtime_config as rc
+        from credential_guard.config import CredentialGuardConfig
+    
+        secret_hits: List[str] = []
+        real_build = rc.build_file_egress_registry
+    
+        def _counting_build(cfg: CredentialGuardConfig):
+            for entry in cfg.credentials.values():
+                if "value" in entry:
+                    secret_hits.append("value")
+                    _ = entry["value"]
+                if "password" in entry:
+                    secret_hits.append("password")
+                    _ = entry["password"]
+            return real_build(cfg)
+    
+        monkeypatch.setattr(rc, "build_file_egress_registry", _counting_build)
+        args = _ref_args()
+        _analyze(tc="tc-p6-exec")
+        on_pre_tool_call(
+            tool_name=HTTP_REFERENCE_TOOL,
+            args=args,
+            session_id="s1",
+            turn_id="t1",
+            tool_call_id="tc-p6-exec",
+        )
+        secret_hits.clear()
+        out = on_tool_execution(
+            HTTP_REFERENCE_TOOL,
+            args,
+            _handler_next,
+            session_id="s1",
+            turn_id="t1",
+            tool_call_id="tc-p6-exec",
+        )
+>       assert json.loads(out)["error"] == RUNTIME_ADAPTER_NOT_READY
+E       AssertionError: assert 'HTTP_ADAPTER_FAILED' == 'RUNTIME_ADAPTER_NOT_READY'
+E         
+E         - RUNTIME_ADAPTER_NOT_READY
+E         + HTTP_ADAPTER_FAILED
+
+tests/test_reference_approval.py:457: AssertionError
+__________ test_red_tool_execution_must_not_open_config_after_publish __________
+
+published_env = {'cfg_path': PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1277/test_red_...onse_body_bytes': 65536}, 'inject': {'type': 'bearer', 'location': 'authorization_header'}, 'approval': 'required'}}})}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x103df4a30>
+
+    def test_red_tool_execution_must_not_open_config_after_publish(
+        published_env, monkeypatch
+    ):
+        args = _ref_args()
+        on_tool_request(
+            tool_name=HTTP_REFERENCE_TOOL,
+            args=args,
+            session_id="s1",
+            turn_id="t1",
+            tool_call_id="tc-snap-exec",
+        )
+        assert (
+            on_pre_tool_call(
+                tool_name=HTTP_REFERENCE_TOOL,
+                args=args,
+                session_id="s1",
+                turn_id="t1",
+                tool_call_id="tc-snap-exec",
+            )["action"]
+            == "approve"
+        )
+        hits = _install_exploding_config_reads(monkeypatch)
+        before = get_execution_secret_resolve_count()
+        calls: List[Any] = []
+        out = on_tool_execution(
+            HTTP_REFERENCE_TOOL,
+            args,
+            lambda a: calls.append(a) or handle_http_credential_request(a),
+            session_id="s1",
+            turn_id="t1",
+            tool_call_id="tc-snap-exec",
+        )
+        assert len(calls) <= 1
+>       assert RUNTIME_ADAPTER_NOT_READY in out
+E       assert 'RUNTIME_ADAPTER_NOT_READY' in '{"error":"HTTP_ADAPTER_FAILED","ok":false,"source":"credential-guard"}'
+
+tests/test_r2_published_snapshot.py:284: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_http_reference_tool.py::test_a_register_includes_http_credential_request
+FAILED tests/test_http_reference_tool.py::test_a_hermes_dispatch_approve_adapter_not_ready
+FAILED tests/test_reference_approval.py::test_d2_reference_consumes_and_adapter_not_ready
+FAILED tests/test_reference_approval.py::test_p6_tool_execution_must_not_touch_credential_secrets
+FAILED tests/test_r2_published_snapshot.py::test_red_tool_execution_must_not_open_config_after_publish
+5 failed, 45 passed in 12.92s
+........................................F............................... [ 41%]
+........................................................................ [ 83%]
+.............................                                            [100%]
+=================================== FAILURES ===================================
+__________ test_r3a_gate_rejects_false_green_patterns[run_r2_e2e.py] ___________
+
+path = PosixPath('/Users/yelei/data/code/repos/hermes-credential-guard/scripts/run_r2_e2e.py')
+
+    @pytest.mark.parametrize("path", _TARGETS, ids=lambda p: p.name)
+    def test_r3a_gate_rejects_false_green_patterns(path: Path):
+        assert path.is_file(), path
+        text = path.read_text(encoding="utf-8")
+        hits = []
+        for cre in _FORBIDDEN:
+            for m in cre.finditer(text):
+                # Allow assertions in test files (assert data["adapter_ok"] is True)
+                line_start = text.rfind("\n", 0, m.start()) + 1
+                line = text[line_start : text.find("\n", m.start())]
+                if line.lstrip().startswith("assert "):
+                    continue
+                hits.append((cre.pattern, m.group(0), line.strip()[:120]))
+>       assert hits == [], f"{path.name} false-green hits: {hits}"
+E       AssertionError: run_r2_e2e.py false-green hits: [('evidence\\[\\s*[\'"]adapter_ok[\'"]\\s*\\]\\s*=\\s*True\\b', 'evidence["adapter_ok"] = True', 'evidence["adapter_ok"] = True'), ('evidence\\[\\s*[\'"]adapter_ok[\'"]\\s*\\]\\s*=\\s*True\\b', 'evidence["adapter_ok"] = True', 'evidence["adapter_ok"] = True')]
+E       assert [('evidence\\...ok"] = True')] == []
+E         
+E         Left contains 2 more items, first extra item: ('evidence\\[\\s*[\'"]adapter_ok[\'"]\\s*\\]\\s*=\\s*True\\b', 'evidence["adapter_ok"] = True', 'evidence["adapter_ok"] = True')
+E         Use -v to get more diff
+
+tests/test_r3a_evidence_authenticity_gate.py:43: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_r3a_evidence_authenticity_gate.py::test_r3a_gate_rejects_false_green_patterns[run_r2_e2e.py]
+1 failed, 172 passed in 12.89s
+=== A5 + R2 baseline ===
+..........................................................               [100%]
+58 passed in 43.58s
+=== VERIFY 1: R3A specialty ===
+...................................                                      [100%]
+35 passed in 0.06s
+EXIT:0
+=== VERIFY 2: R3A handler/main/e2e/gate ===
+............                                                             [100%]
+12 passed in 4.41s
+EXIT:0
+=== VERIFY 3: R2 baseline authenticity ===
+................................................                         [100%]
+48 passed in 39.78s
+EXIT:0
+=== VERIFY 4+5: full pytest ===
+ERROR tests/test_reproducible_release.py::test_l2_artifact_entry_wrong_type_red[sha256-bad_value4-must be 64-char lowercase hex-sdist]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_entry_wrong_type_red[sha256-bad_value4-must be 64-char lowercase hex-plugin_zip]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-version must be]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-source_date_epoch must be]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-normalized_archives must be boolean True]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-pythonhashseed must be]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-build\\.tz must be]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-build_python must be a non-empty string0]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-build_python must be a non-empty string1]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-plugin_zip\\.filename must be]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-must be a basename0]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-must be a basename1]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-sdist\\.filename must be|filenames must be unique]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-must be 64-char lowercase hex0]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-must be 64-char lowercase hex1]
+ERROR tests/test_reproducible_release.py::test_l2_artifact_manifest_value_drift_mutations_are_red[<lambda>-artifact hash drift]
+ERROR tests/test_reproducible_release.py::test_l2_duplicate_filenames_red - P...
+ERROR tests/test_reproducible_release.py::test_l2_deps_drift_red - Permission...
+ERROR tests/test_reproducible_release.py::test_l2_standard_filenames_match_builder_constants
+18 failed, 971 passed, 2 xfailed, 83 errors in 72.63s (0:01:12)
+FULL_EXIT:
+=== VERIFY 6: compileall ===
+COMPILE_EXIT:0
+=== VERIFY 7: workspace digest x2 ===
+review_workspace_files 225 225
+review_workspace_sha256_1 06c440717906f713f8263f00c5c9224ccf715f10d727dc89dbeafcca6b973fd8
+review_workspace_sha256_2 06c440717906f713f8263f00c5c9224ccf715f10d727dc89dbeafcca6b973fd8
+review_stable True
+candidate_manifest_sha256_1 3dcbd1654bfa0e3186eaaddd0fcf504710c2227c6566ecb4a099d7dd16675c9a
+candidate_manifest_sha256_2 3dcbd1654bfa0e3186eaaddd0fcf504710c2227c6566ecb4a099d7dd16675c9a
+candidate_stable True
+FFFFFFFF...F.F                                                           [100%]
+=================================== FAILURES ===================================
+_______________ test_t1_red_contract_spike_present_or_documented _______________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/test_t1_red_contract_spike_pre0')
+
+    def test_t1_red_contract_spike_present_or_documented(tmp_path: Path):
+        """T1: before tool_execution, plain count must be 0; ref visible in request/approve."""
+        if not RUN_PROOF.is_file():
+            pytest.fail(
+                "RED: spikes/tool-injection-proof/run_proof.py missing — "
+                "approve.before_execution_plain_count cannot be proven yet"
+            )
+>       data = _run_proof("approve", tmp_path)
+
+tests/test_tool_injection_foundation.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_tool_injection_foundation.py:45: in _run_proof
+    assert HERMES_PYTHON.is_file(), "Hermes Python missing"
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1446: in is_file
+    return S_ISREG(self.stat().st_mode)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('[SENSITIVE_PATH_REDACTED]')
+
+    def stat(self):
+        """
+        Return the result of the stat() system call on this path, like
+        os.stat() does.
+        """
+>       return self._accessor.stat(self)
+E       PermissionError: [Errno 1] Operation not permitted: '[SENSITIVE_PATH_REDACTED]'
+
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222: PermissionError
+_________________ test_t2_approve_injects_only_after_approval __________________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/test_t2_approve_injects_only_a0')
+
+    def test_t2_approve_injects_only_after_approval(tmp_path: Path):
+>       data = _run_proof("approve", tmp_path)
+
+tests/test_tool_injection_foundation.py:97: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_tool_injection_foundation.py:45: in _run_proof
+    assert HERMES_PYTHON.is_file(), "Hermes Python missing"
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1446: in is_file
+    return S_ISREG(self.stat().st_mode)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('[SENSITIVE_PATH_REDACTED]')
+
+    def stat(self):
+        """
+        Return the result of the stat() system call on this path, like
+        os.stat() does.
+        """
+>       return self._accessor.stat(self)
+E       PermissionError: [Errno 1] Operation not permitted: '[SENSITIVE_PATH_REDACTED]'
+
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222: PermissionError
+____________________ test_t3_deny_no_resolve_no_downstream _____________________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/test_t3_deny_no_resolve_no_dow0')
+
+    def test_t3_deny_no_resolve_no_downstream(tmp_path: Path):
+>       data = _run_proof("deny", tmp_path)
+
+tests/test_tool_injection_foundation.py:114: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_tool_injection_foundation.py:45: in _run_proof
+    assert HERMES_PYTHON.is_file(), "Hermes Python missing"
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1446: in is_file
+    return S_ISREG(self.stat().st_mode)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('[SENSITIVE_PATH_REDACTED]')
+
+    def stat(self):
+        """
+        Return the result of the stat() system call on this path, like
+        os.stat() does.
+        """
+>       return self._accessor.stat(self)
+E       PermissionError: [Errno 1] Operation not permitted: '[SENSITIVE_PATH_REDACTED]'
+
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222: PermissionError
+_____________________ test_t4_exception_paths_fail_closed ______________________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/test_t4_exception_paths_fail_c0')
+
+    def test_t4_exception_paths_fail_closed(tmp_path: Path):
+        for fault in (
+            "tool_request",
+            "pre_tool_call",
+            "tool_execution_resolver",
+            "tool_execution_inject",
+        ):
+>           data = _run_proof("fault", tmp_path / fault, TIP_FAULT=fault)
+
+tests/test_tool_injection_foundation.py:128: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_tool_injection_foundation.py:45: in _run_proof
+    assert HERMES_PYTHON.is_file(), "Hermes Python missing"
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1446: in is_file
+    return S_ISREG(self.stat().st_mode)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('[SENSITIVE_PATH_REDACTED]')
+
+    def stat(self):
+        """
+        Return the result of the stat() system call on this path, like
+        os.stat() does.
+        """
+>       return self._accessor.stat(self)
+E       PermissionError: [Errno 1] Operation not permitted: '[SENSITIVE_PATH_REDACTED]'
+
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222: PermissionError
+____________ test_t4b_all_faults_real_exceptions_and_no_downstream _____________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/test_t4b_all_faults_real_excep0')
+
+    def test_t4b_all_faults_real_exceptions_and_no_downstream(tmp_path: Path):
+        """B3 aggregate: four real exceptions; every fault path downstream=0."""
+        total_exc = 0
+        for fault in (
+            "tool_request",
+            "pre_tool_call",
+            "tool_execution_resolver",
+            "tool_execution_inject",
+        ):
+>           data = _run_proof("fault", tmp_path / f"agg-{fault}", TIP_FAULT=fault)
+
+tests/test_tool_injection_foundation.py:156: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_tool_injection_foundation.py:45: in _run_proof
+    assert HERMES_PYTHON.is_file(), "Hermes Python missing"
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1446: in is_file
+    return S_ISREG(self.stat().st_mode)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('[SENSITIVE_PATH_REDACTED]')
+
+    def stat(self):
+        """
+        Return the result of the stat() system call on this path, like
+        os.stat() does.
+        """
+>       return self._accessor.stat(self)
+E       PermissionError: [Errno 1] Operation not permitted: '[SENSITIVE_PATH_REDACTED]'
+
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222: PermissionError
+_____________ test_t5_single_next_call_original_args_and_isolation _____________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/test_t5_single_next_call_origi0')
+
+    def test_t5_single_next_call_original_args_and_isolation(tmp_path: Path):
+>       data = _run_proof("once_and_concurrent", tmp_path)
+
+tests/test_tool_injection_foundation.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_tool_injection_foundation.py:45: in _run_proof
+    assert HERMES_PYTHON.is_file(), "Hermes Python missing"
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1446: in is_file
+    return S_ISREG(self.stat().st_mode)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('[SENSITIVE_PATH_REDACTED]')
+
+    def stat(self):
+        """
+        Return the result of the stat() system call on this path, like
+        os.stat() does.
+        """
+>       return self._accessor.stat(self)
+E       PermissionError: [Errno 1] Operation not permitted: '[SENSITIVE_PATH_REDACTED]'
+
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222: PermissionError
+____________ test_b1_b4_no_partial_secret_residue_and_residue_gate _____________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/test_b1_b4_no_partial_secret_r0')
+
+    def test_b1_b4_no_partial_secret_residue_and_residue_gate(tmp_path: Path):
+        """B1/B4: no full decoy or >=8 contiguous fragment in evidence/state/stdio."""
+        for scenario in ("approve", "deny", "once_and_concurrent"):
+>           data = _run_proof(scenario, tmp_path / f"res-{scenario}")
+
+tests/test_tool_injection_foundation.py:190: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_tool_injection_foundation.py:45: in _run_proof
+    assert HERMES_PYTHON.is_file(), "Hermes Python missing"
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1446: in is_file
+    return S_ISREG(self.stat().st_mode)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('[SENSITIVE_PATH_REDACTED]')
+
+    def stat(self):
+        """
+        Return the result of the stat() system call on this path, like
+        os.stat() does.
+        """
+>       return self._accessor.stat(self)
+E       PermissionError: [Errno 1] Operation not permitted: '[SENSITIVE_PATH_REDACTED]'
+
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222: PermissionError
+__________________ test_b4_fault_paths_also_pass_residue_gate __________________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/test_b4_fault_paths_also_pass_0')
+
+    def test_b4_fault_paths_also_pass_residue_gate(tmp_path: Path):
+        total_downstream = 0
+        total_exc = 0
+        for fault in (
+            "tool_request",
+            "pre_tool_call",
+            "tool_execution_resolver",
+            "tool_execution_inject",
+        ):
+>           data = _run_proof("fault", tmp_path / f"res-fault-{fault}", TIP_FAULT=fault)
+
+tests/test_tool_injection_foundation.py:218: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_tool_injection_foundation.py:45: in _run_proof
+    assert HERMES_PYTHON.is_file(), "Hermes Python missing"
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1446: in is_file
+    return S_ISREG(self.stat().st_mode)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('[SENSITIVE_PATH_REDACTED]')
+
+    def stat(self):
+        """
+        Return the result of the stat() system call on this path, like
+        os.stat() does.
+        """
+>       return self._accessor.stat(self)
+E       PermissionError: [Errno 1] Operation not permitted: '[SENSITIVE_PATH_REDACTED]'
+
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py:1222: PermissionError
+_________ test_r2_report_section_13_manifest_labels_match_live_digests _________
+
+    def test_r2_report_section_13_manifest_labels_match_live_digests():
+        text = REPORT.read_text(encoding="utf-8")
+        assert "## 13." in text
+        # Prefer latest freeze section (§15 > §14 > §13) for live digests.
+        section = None
+        for n in range(20, 12, -1):
+            marker = f"## {n}."
+            if marker in text:
+                section = text.split(marker, 1)[1]
+                break
+        assert section is not None, "report must contain a freeze section ≥ §13"
+    
+        # Candidate: must document path:sha256 (no size) and match live function.
+        cand_algo = re.search(
+            r"candidate_manifest_sha256.*?algorithm[：:]\s*`?([^`\n（(]+)",
+            section,
+            re.IGNORECASE | re.DOTALL,
+        )
+        assert cand_algo, "latest section must document candidate_manifest_sha256 algorithm"
+        cand_algo_s = cand_algo.group(1)
+        assert "size" not in cand_algo_s.lower()
+        assert "sha256" in cand_algo_s.lower()
+    
+        cand_val = re.search(
+            r"candidate_manifest_sha256[：:]\s*([0-9a-f]{64})",
+            section,
+        )
+        assert cand_val, "latest section must publish candidate_manifest_sha256 value"
+        live_cand = candidate_manifest_sha256(REPO)
+>       assert cand_val.group(1) == live_cand
+E       AssertionError: assert '04777ac4e179...87732d9916209' == '3dcbd1654bfa...9d7dd16675c9a'
+E         
+E         - 3dcbd1654bfa0e3186eaaddd0fcf504710c2227c6566ecb4a099d7dd16675c9a
+E         + 04777ac4e17924fe4b765ef3cd75d3db96e29487a92027846b187732d9916209
+
+tests/test_r2_report_manifest_labels.py:138: AssertionError
+__________________ test_search_from_parent_of_ssh_fail_closed __________________
+
+tmp_path = PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/test_search_from_parent_of_ssh0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10430bc40>
+
+    def test_search_from_parent_of_ssh_fail_closed(tmp_path: Path, monkeypatch):
+        home = tmp_path / "home"
+        ssh = home / ".ssh"
+        ssh.mkdir(parents=True)
+        (ssh / "config").write_text("Host x\n", encoding="utf-8")
+        monkeypatch.setenv("HOME", str(home))
+        # Searching HOME or parent that can reach .ssh must fail closed.
+        assert search_path_is_protected(str(home))
+        assert search_path_is_protected(str(tmp_path))
+        assert search_path_is_protected(str(ssh))
+        # Unrelated branch under tmp is fine if it cannot reach .ssh as search root.
+        other = tmp_path / "other"
+        other.mkdir()
+        # Searching tmp_path itself can reach home/.ssh — protected.
+        assert search_path_is_protected(str(tmp_path))
+        # Searching an unrelated sibling that does not contain protected trees.
+        alone = tmp_path.parent / f"alone-{tmp_path.name}"
+        alone.mkdir(exist_ok=True)
+        (alone / "a.txt").write_text("x", encoding="utf-8")
+        monkeypatch.setenv("HOME", str(home))  # HOME still under tmp_path
+        # alone is outside home; searching it should not hit protected tree.
+>       assert not search_path_is_protected(str(alone))
+E       AssertionError: assert not True
+E        +  where True = search_path_is_protected('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/alone-test_search_from_parent_of_ssh0')
+E        +    where '/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/alone-test_search_from_parent_of_ssh0' = str(PosixPath('/private/var/folders/lg/drxkydpx79v63vynvshc0zb40000gn/T/pytest-of-yelei/pytest-1284/alone-test_search_from_parent_of_ssh0'))
+
+tests/test_sensitive_paths.py:151: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_tool_injection_foundation.py::test_t1_red_contract_spike_present_or_documented
+FAILED tests/test_tool_injection_foundation.py::test_t2_approve_injects_only_after_approval
+FAILED tests/test_tool_injection_foundation.py::test_t3_deny_no_resolve_no_downstream
+FAILED tests/test_tool_injection_foundation.py::test_t4_exception_paths_fail_closed
+FAILED tests/test_tool_injection_foundation.py::test_t4b_all_faults_real_exceptions_and_no_downstream
+FAILED tests/test_tool_injection_foundation.py::test_t5_single_next_call_original_args_and_isolation
+FAILED tests/test_tool_injection_foundation.py::test_b1_b4_no_partial_secret_residue_and_residue_gate
+FAILED tests/test_tool_injection_foundation.py::test_b4_fault_paths_also_pass_residue_gate
+FAILED tests/test_r2_report_manifest_labels.py::test_r2_report_section_13_manifest_labels_match_live_digests
+FAILED tests/test_sensitive_paths.py::test_search_from_parent_of_ssh_fail_closed
+10 failed, 4 passed in 0.21s
+=== R0-R2 core specialty (no real hermes home) ===
+........................................................................ [ 26%]
+........................................................................ [ 53%]
+........................................................................ [ 79%]
+.......................................................                  [100%]
+271 passed in 13.11s
+........................................................................ [ 26%]
+........................................................................ [ 53%]
+........................................................................ [ 79%]
+.......................................................                  [100%]
+271 passed in 13.11s
+FINAL review_workspace_files 225
+FINAL review_workspace_sha256 572cd1c1b61899d5dde52d378a2440499e7c82fef2eddc9672c6ce719e95e18f
+FINAL review_stable True
+FINAL candidate_manifest_sha256 3dcbd1654bfa0e3186eaaddd0fcf504710c2227c6566ecb4a099d7dd16675c9a
+
+## Final verification summary (coding agent self-report; not sign-off)
+
+### Slice counts
+- A1 schema: 18 passed
+- A2 injection core: 4 passed
+- A3 http adapter: 13 passed
+- A4 handler wiring: 2 passed
+- A5 main/e2e/gate: covered in verify 2 (12 passed) + thin suites
+
+### Ordered verification
+1. R3A specialty (schema/core/adapter): 35 passed
+2. R3A handler/main/e2e/gate: 12 passed
+3. R2 main_agent+e2e+toctou+authenticity: 48 passed
+4. R0-R2 core specialty (isolated): 271 passed
+5. Full pytest: 971 passed, 2 xfailed, 18 failed, 83 errors
+6. compileall: exit 0
+7. workspace digests: see FINAL block below
+
+### Blockers (honest)
+- Sandbox blocks stat/read of [SENSITIVE_PATH_REDACTED] → hermes_cli_e2e, tool_injection_foundation (uses real hermes venv path), production_package_scan, reproducible_release ERROR/FAIL. Main agent must re-run outside sandbox.
+- tests/test_r2_report_manifest_labels.py fails: live candidate_manifest_sha256 drifted after R3A code; R2 report not updated per task (do not mark R2/R3 PASS in HANDOVER).
+- tests/test_sensitive_paths.py::test_search_from_parent_of_ssh_fail_closed failed in this environment (appears unrelated to R3A HTTP inject; needs main-agent recheck).
+
+### Scope
+R3A only (injection kernel + HTTP). R3B/R4/R5/R6 not implemented. No CLAUDE/HANDOVER PASS backfill. No dist/build/install. No git.
+
+POST_REPORT review_workspace_files 225
+POST_REPORT review_workspace_sha256 f0c3d3232aa8a14458ab7950972704d5bdf1cf8be1d22e66e73b6604d060584f
+POST_REPORT review_stable True (two consecutive)
+POST_REPORT candidate_manifest_sha256 3dcbd1654bfa0e3186eaaddd0fcf504710c2227c6566ecb4a099d7dd16675c9a
+POST_REPORT candidate_stable True
+pre_work review was 8b4888e82767aa6d3d8c06308718f7035c204fc201d6bc628dffd9583f181c42 (213 files)
+
+
+## Round2 final-review blockers (B1-B4) — 2026-08-03
+
+### B4 pre-clean
+action: redacted full CG_* decoy bodies -> [SYNTHETIC_DECOY_REDACTED]
+action: redacted synthetic DNS hosts -> [SYNTHETIC_HOST_REDACTED]
+note: RED/GREEN structure facts retained
+
+### B1 transport seam
+RED: test_b1_open_must_not_receive_context_kwarg FAILED (context= still passed to open)
+GREEN: production opener = ProxyHandler({}) + NoRedirect + HTTPSHandler(context=ctx); open without context=
+mutation: source gate forbids context= on open; TypeError seam on OpenerDirector.open(..., context=)
+loopback: test_b1_loopback_tls_uses_production_transport PASS (tmp CA+server, production _default_transport, verify on)
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3a_production_transport.py
+result: 9 passed
+
+### B2 limits honesty
+connect_timeout: passed into _build_production_opener -> socket.create_connection timeout
+total_timeout: monotonic deadline covers body reads; slow body blocked
+header bytes: HONEST NARROW — removed max_response_header_bytes from Schema/runtime/adapter;
+  model-output allowlist (_filter_response_headers) retained; R3方案 §7.2 updated
+schema reject unknown max_response_header_bytes: PASS
+result: transport+schema suite green with B1
+
+### B3 full order + mutation
+RED: approve order missing consume/resolve/adapter
+GREEN: setprofile observes InjectionPlanStore.consume / resolve_one_for_execution / execute_http
+observed approve order: tool_request -> tool_execution -> pre_tool_call -> approval_gate -> handler -> consume -> resolve -> adapter
+deny/timeout: resolve=0 adapter=0; replay: consume/resolve/adapter counts stay 1
+mutation: CG_DROP_SEAM=consume|resolve|adapter breaks healthy approve
+authenticity gate: requires live symbols + rejects constant order/counts
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3a_main_agent_path.py tests/test_r3a_evidence_authenticity_gate.py
+result: 14 passed (earlier slice)
+
+### B4 hygiene gate
+tests/test_r3a_evidence_hygiene.py: 3 passed
+scan rejects CG_* bodies, DNS hosts, [SENSITIVE_HOME_PATHS] patterns
+
+## Round2 blockers regression (final self-check)
+
+1. B1 transport (-k b1_): 5 passed
+2. B2 transport+schema: 27 passed (connect/total real; max_response_header_bytes removed)
+3. B3 main+authenticity: 13 passed; full order observed; DROP_SEAM mutations RED
+4. B4 hygiene: 3 passed
+5. R3A + historical identity suite: 72 passed (was 55 before blocker tests; no claim of R3A PASS)
+6. R2 main chain: 48 passed
+7. R0-R2 core specialty sample: 396 passed
+8. Full pytest (this env): 993 passed, 2 xfailed, 17 failed, 83 errors — failures/errors are OS-boundary PermissionError on [SENSITIVE_PATH_REDACTED] hermes-agent paths / release artifact writes; not B1-B4 logic
+8b. Full minus OS-boundary suites: 869 passed, 2 xfailed, 1 failed (pre-existing sensitive_paths alone-sibling)
+9. compileall: exit 0
+10. review workspace digest computed below after this append
+
+status: blocker fix CANDIDATE only — do not sign R3A PASS
+
+FINAL_BLOCKER_CANDIDATE review_workspace_files 227
+FINAL_BLOCKER_CANDIDATE review_workspace_sha256 db665fc4cd6df165ccb6df4bd3a4fbffe6c1b8caed8d600acf0723f290fc82b9
+FINAL_BLOCKER_CANDIDATE review_stable True
+
+## Round3 HTTPError total-deadline blocker — 2026-08-03
+
+### RED
+test: test_b2_total_deadline_blocks_slow_httperror_body
+mechanism: synthetic slow-drip HTTPError/302 body; fake monotonic advances 0.4s per read; total_timeout_seconds=1
+observed: DID NOT RAISE HttpAdapterError — transport returned status after deadline (pre-read check only)
+result: 1 failed (RED accurate)
+
+### GREEN
+fix: shared _read_body_with_deadline for OK response and HTTPError paths
+semantics: pre-read remaining deadline; chunked bounded read; post-read + post-loop monotonic checks; safe HTTP_ADAPTER_FAILED; no URL/host/body leak in error repr
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3a_production_transport.py::test_b2_total_deadline_blocks_slow_httperror_body
+result: 1 passed
+
+### mutation
+test: test_b2_mutation_httperror_body_without_post_deadline_returns_status
+mechanism: replace reader with same loop minus post-read/post-loop checks; oversize single chunk exits while without re-pre-check
+observed under mutation: status 302 returned past deadline
+control: restore production reader → same FP raises HTTP_ADAPTER_FAILED
+result: mutation RED vs contract proven (not source-string-only)
+
+### Ordered verification
+1. slow HTTPError specialty: 1 passed (after GREEN)
+2. tests/test_r3a_production_transport.py: 13 passed
+3. R3A + historical identity suite: 74 passed (was 72; +2 HTTPError deadline tests)
+4. R2 main chain: 48 passed
+5. Full pytest (this env): 995 passed, 2 xfailed, 17 failed, 83 errors — failures/errors are OS-boundary PermissionError on [SENSITIVE_PATH_REDACTED] hermes-agent / release artifact paths; not HTTPError deadline logic
+6. compileall: exit 0
+7. workspace digests: see FINAL block below
+
+status: Round3 single-blocker fix CANDIDATE only — do not sign R3A PASS
+
+ROUND3_SINGLE_BLOCKER_CANDIDATE review_workspace_files 228
+ROUND3_SINGLE_BLOCKER_CANDIDATE review_workspace_sha256 d1f634aa5009bc33ea4f3b22c088d8a5d7f6d7e34c7dbfd0fb25686a3aa0ed2a
+ROUND3_SINGLE_BLOCKER_CANDIDATE review_stable True
+
+## 主代理 Round4 非沙箱权威复验 — 2026-08-04
+
+本区块为**当前主代理非沙箱权威复验**结果，覆盖 Round4 真实嵌套 HTTPError socket deadline 候选之后的冻结身份。
+
+### 权威计数（非沙箱）
+- production transport + evidence hygiene：18 passed
+- R3A + 历史身份：78 passed
+- R2 主链：48 passed
+- 全量：1099 passed，2 xfailed，0 failed
+- compileall：exit 0
+- technical candidate before administrative evidence alignment：231 files，`353465438fc37aa90ddecc23830d871f834f774fb9406c8bdc5c5dfb8f85b20f`，连续两次一致
+- final administrative workspace identity：见递归排除的 `.r3a-freeze-evidence.sha256`；最终采用 POSIX 相对路径字符串 Unicode code-point 排序。此前主代理 `Path` 对象排序得到的 `151082c3…` 已判定为算法口径错误并作废；独立 reviewer 在证据日志更新前复算的 `d22c655b…` 是前一行政快照。证据口径修正后的最终摘要为 sidecar 所记值。
+
+### 历史快照（非最终权威签收）
+以下均为历史结果，不是当前权威签收：
+- Round3 production transport 11 passed、R3A 74 passed、全量 1095 passed / 2 xfailed / 0 failed；
+- Round3 workspace 230 files / `17e58c4a8124fb11a3880ac04b69fb076a382227e048b6dd021e742fd4931422`；
+- 编码 Agent 沙箱的 13 passed、PermissionError/failed+errors、228 files / `d1f634aa…`；
+- Round4 编码 Agent candidate 的 14/78/48 与沙箱全量；这些只证明候选，不替代本区块。
+
+status: Round4 主代理权威复验已对齐证据载体；R3A 仍等待最终只读复审，未宣称 PASS
+
+
+## Round4 final two-blockers — candidate only — 2026-08-04
+
+Agent-authored Round4 **candidate** only. Not main-agent final identity; do not sign R3A PASS.
+
+### Blocker A — HTTPError nested socket deadline
+
+#### RED
+test: test_b2_httperror_nested_response_pushes_remaining_deadline_to_socket
+shape: HTTPError.fp -> HTTPResponse-like -> fp.raw._sock (not flat FP)
+observed: settimeout_calls == 0 under one-level unwrap
+result: 1 failed (RED accurate)
+
+#### GREEN
+fix: _find_deadline_socket — bounded depth, fixed attrs (fp/raw/_sock); settimeout(max(remaining, 1e-3)) before each blocking read; post-read monotonic checks retained
+command: .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_r3a_production_transport.py::test_b2_httperror_nested_response_pushes_remaining_deadline_to_socket
+result: 1 passed; OK-response fp.raw._sock regression also passed
+
+#### mutation
+test: test_b2_mutation_httperror_nested_shallow_unwrap_skips_socket_deadline
+mechanism: replace reader with one-level fp.raw._sock only
+observed under mutation: nested sock settimeout_calls == []
+control: restore production reader → settimeout_calls > 0 with values > 0
+result: mutation RED vs contract proven (not source-string-only)
+
+### Blocker B — evidence carrier alignment
+appended「主代理 Round3 非沙箱权威复验」block with authoritative counts;
+marked prior「13 passed」、沙箱 PermissionError、228 files / d1f634… as historical coding-agent sandbox snapshot
+hygiene: test_b4_evidence_log_marks_round3_sandbox_as_historical added; 4 passed
+
+### Ordered verification (this Agent env — Round4 candidate)
+1. nested HTTPError specialty + mutation + OK regression: 3 passed
+2. tests/test_r3a_production_transport.py: 14 passed
+3. evidence hygiene: 4 passed
+4. R3A + historical identity suite: 78 passed (Round3 authoritative was 74; +3 nested/OK +1 hygiene)
+5. R2 main chain: 48 passed
+6. Full pytest (this env): 999 passed, 2 xfailed, 17 failed, 83 errors — failures/errors are OS-boundary PermissionError on [SENSITIVE_PATH_REDACTED] hermes-agent / release artifact paths plus pre-existing sensitive_paths alone-sibling; not Round4 nested-deadline logic. Not a non-sandbox authoritative full-suite claim (Round3权威全量 1095/2xfail/0fail).
+7. compileall: exit 0
+8. workspace digests (pre-this-stamp, consecutive): 229 files, c7c5d8215ba8d4c6eb9f919b59486de15218e5dca05e56c2a4899a90812aca56, stable True
+
+status: Round4 two-blocker fix CANDIDATE only — do not sign R3A PASS; await main-agent non-sandbox re-verify
+
+ROUND4_TWO_BLOCKER_CANDIDATE review_workspace_files 229
+ROUND4_TWO_BLOCKER_CANDIDATE review_workspace_sha256 c7c5d8215ba8d4c6eb9f919b59486de15218e5dca05e56c2a4899a90812aca56
+ROUND4_TWO_BLOCKER_CANDIDATE review_stable True
+

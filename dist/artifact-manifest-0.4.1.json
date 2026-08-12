@@ -1,0 +1,23 @@
+{
+  "build": {
+    "build_python": "/Users/yelei/.hermes/hermes-agent/venv/bin/python",
+    "normalized_archives": true,
+    "pythonhashseed": "0",
+    "source_date_epoch": 1704067200,
+    "tz": "UTC"
+  },
+  "candidate_manifest_sha256": "a86c255f6418ff8807c6d6cc39830c9285aaccfbc606ce60b49a8a9cc4b8bba0",
+  "plugin_zip": {
+    "filename": "credential-guard-0.4.1-hermes-plugin.zip",
+    "sha256": "3bee46a83c45579faae693d8dd4f681d9128373014e36069eaabadbd1677d16c"
+  },
+  "sdist": {
+    "filename": "hermes_credential_guard-0.4.1.tar.gz",
+    "sha256": "27e67907ecf13e8be5018206bdc54241e5196bc2eee0c149ce62192f18f65020"
+  },
+  "version": "0.4.1",
+  "wheel": {
+    "filename": "hermes_credential_guard-0.4.1-py3-none-any.whl",
+    "sha256": "df0f783ae1c8a2698e672bf0b4d54943cb3e48033a206c9d6649d9de3369de20"
+  }
+}

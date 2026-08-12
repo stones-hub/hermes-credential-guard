@@ -1,0 +1,30 @@
+{
+  "incident": "worker-config-drift-during-r1a",
+  "detected_at": "2026-07-31T16:28:00+08:00",
+  "expected": {
+    "path": "/Users/yelei/.hermes/profiles/worker/config.yaml",
+    "sha256": "2bad7d2dd9746d5d6283fc0e99b010212261dae713624089bf8754cd59337977",
+    "mtime": "2026-07-31 15:52:29",
+    "size": 19011,
+    "mode": "0600"
+  },
+  "observed": {
+    "sha256": "e8778ff022aefbccefdfb1270e3c0aa2aa84be1d7b10d8d04b37a34639602fbb",
+    "birth_mtime_ctime": "2026-07-31 16:14:31",
+    "size": 18251,
+    "mode": "0644"
+  },
+  "backup_evidence": {
+    "path": "/Users/yelei/.hermes/profiles/worker/config.yaml.bak",
+    "sha256": "2bad7d2dd9746d5d6283fc0e99b010212261dae713624089bf8754cd59337977",
+    "mtime": "2026-07-31 16:14:31",
+    "size": 19011,
+    "mode": "0600"
+  },
+  "actions": [
+    "stopped all R1A background processes",
+    "did not restore or modify real config",
+    "did not start R1B",
+    "awaiting user decision"
+  ]
+}
