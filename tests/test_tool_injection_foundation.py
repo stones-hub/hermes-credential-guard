@@ -182,6 +182,18 @@ def test_t5_single_next_call_original_args_and_isolation(tmp_path: Path):
     assert data.get("concurrent_each_next_call_once") is True, (
         f"B2 RED: concurrent next_call once-each not proven; got {data}"
     )
+    assert data.get("concurrent_both_calls_succeeded") is True, (
+        f"B2 RED: both concurrent calls must return success; got {data}"
+    )
+
+
+def test_t5_concurrent_approval_patch_scope_is_shared():
+    """Concurrent proof must not nest process-global unittest.mock patch contexts."""
+    source = RUN_PROOF.read_text(encoding="utf-8")
+    scenario = source[source.index('if scenario == "once_and_concurrent":') :]
+    assert "install_approval_patch: bool = True" in source
+    assert 'with patch("tools.approval.request_tool_approval", side_effect=shared_gate):' in scenario
+    assert "install_approval_patch=False" in scenario
 
 
 def test_b1_b4_no_partial_secret_residue_and_residue_gate(tmp_path: Path):

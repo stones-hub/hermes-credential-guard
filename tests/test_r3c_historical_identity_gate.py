@@ -706,6 +706,9 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         "tests/support/artifact_composition_audit.py",
         "tests/test_r6_artifact_composition.py",
         "tests/test_current_dist_policy.py",
+        # 0.4.2 release-close README fail-closed structure and behavior gates.
+        "tests/test_readme_install_fail_closed.py",
+        "tests/test_readme_install_behavior.py",
         # R6 slice 4a source/task deltas. dist/ members stay out of this
         # enumerator (_SKIP_DIRS includes dist); 0.4.0 ZIP identity is pinned
         # by the installed-ZIP E2E harness + artifact composition tests.

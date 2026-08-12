@@ -77,11 +77,14 @@ bindings    = 允许申请执行的固定能力
 在线安装会通过 Git 克隆 GitHub 默认分支。它不会自动下载 GitHub Release 中的 ZIP，也不会自动选择最新 Tag。
 
 ```bash
+set -euo pipefail
+
 PROFILE="default"
 hermes -p "$PROFILE" plugins install stones-hub/hermes-credential-guard --enable
 hermes -p "$PROFILE" tools enable credential_guard --platform cli
 hermes -p "$PROFILE" config set approvals.mode manual
 hermes -p "$PROFILE" config set security.redact_secrets true
+printf '%s\n' "ONLINE_INSTALL_OK"
 ```
 
 如果只想安装、暂不启用：
@@ -111,30 +114,40 @@ credential-guard-0.4.2-hermes-plugin.zip
 ### 1. 设置路径并核对 SHA-256
 
 ```bash
+set -euo pipefail
+
 PROFILE="default"
 PLUGIN_ZIP="/path/to/credential-guard-0.4.2-hermes-plugin.zip"
+EXPECTED_SHA256="95d96aa82f64701dfc0b5862ba3671feb98b7d5c07a61f350dbe65287fb60ccf"
 CONFIG_PATH="$(hermes -p "$PROFILE" config path)"
 PROFILE_ROOT="$(dirname "$CONFIG_PATH")"
 PLUGIN_DIR="$PROFILE_ROOT/plugins/credential-guard"
 STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/credential-guard-0.4.2.XXXXXX")"
-shasum -a 256 "$PLUGIN_ZIP"
+ACTUAL_SHA256="$(shasum -a 256 "$PLUGIN_ZIP" | cut -d ' ' -f 1)"
+
+if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+  printf '%s\n' "错误：插件 ZIP 的 SHA-256 不匹配。"
+  printf '%s\n' "期望：$EXPECTED_SHA256"
+  printf '%s\n' "实际：$ACTUAL_SHA256"
+  exit 1
+fi
+
+printf '%s\n' "ZIP_SHA256_OK"
 ```
 
-0.4.2 正式 ZIP 的 SHA-256：
-
-```text
-95d96aa82f64701dfc0b5862ba3671feb98b7d5c07a61f350dbe65287fb60ccf
-```
-
-摘要不一致时停止安装。
+上述代码块会自动比较摘要。摘要不一致时返回非零状态并立即停止，不得继续解压或安装。
 
 ### 2. 解压并检查结构
 
 ```bash
+set -euo pipefail
+
 unzip -q "$PLUGIN_ZIP" -d "$STAGE_DIR"
 test -f "$STAGE_DIR/credential-guard/plugin.yaml"
 test -f "$STAGE_DIR/credential-guard/__init__.py"
-grep '^version:' "$STAGE_DIR/credential-guard/plugin.yaml"
+grep -qx 'version: 0.4.2' "$STAGE_DIR/credential-guard/plugin.yaml"
+test ! -e "$STAGE_DIR/credential-guard/credential-guard"
+printf '%s\n' "ZIP_STRUCTURE_OK"
 ```
 
 预期版本：
@@ -158,17 +171,34 @@ credential-guard/
 全新安装：
 
 ```bash
+set -euo pipefail
+
 mkdir -p "$PROFILE_ROOT/plugins"
+test ! -e "$PLUGIN_DIR"
 cp -R "$STAGE_DIR/credential-guard" "$PLUGIN_DIR"
+test -f "$PLUGIN_DIR/plugin.yaml"
+grep -qx 'version: 0.4.2' "$PLUGIN_DIR/plugin.yaml"
+test ! -e "$PLUGIN_DIR/credential-guard"
+printf '%s\n' "PLUGIN_INSTALL_OK"
 ```
 
 如果已经安装旧版本，不要把新文件覆盖到旧目录中。先停止 Gateway，并把旧插件目录整体备份移走：
 
 ```bash
+set -euo pipefail
+
 hermes -p "$PROFILE" gateway stop
 BACKUP_DIR="$PROFILE_ROOT/plugins/credential-guard.backup-$(date +%Y%m%d-%H%M%S)"
+test -d "$PLUGIN_DIR"
+test ! -e "$BACKUP_DIR"
 mv "$PLUGIN_DIR" "$BACKUP_DIR"
+test -d "$BACKUP_DIR"
+test ! -e "$PLUGIN_DIR"
 cp -R "$STAGE_DIR/credential-guard" "$PLUGIN_DIR"
+test -f "$PLUGIN_DIR/plugin.yaml"
+grep -qx 'version: 0.4.2' "$PLUGIN_DIR/plugin.yaml"
+test ! -e "$PLUGIN_DIR/credential-guard"
+printf '%s\n' "PLUGIN_UPGRADE_OK"
 ```
 
 > 插件代码目录与凭证 Store 相互独立。升级插件时不要删除或移动 `$PROFILE_ROOT/credential-guard/`，其中可能保存真实凭证。
@@ -176,10 +206,13 @@ cp -R "$STAGE_DIR/credential-guard" "$PLUGIN_DIR"
 ### 4. 启用插件和工具集
 
 ```bash
+set -euo pipefail
+
 hermes -p "$PROFILE" plugins enable credential-guard --no-allow-tool-override
 hermes -p "$PROFILE" tools enable credential_guard --platform cli
 hermes -p "$PROFILE" config set approvals.mode manual
 hermes -p "$PROFILE" config set security.redact_secrets true
+printf '%s\n' "PLUGIN_ENABLE_OK"
 ```
 
 安装后删除临时解压目录：
@@ -495,8 +528,11 @@ hermes -p "$PROFILE" gateway restart
 ## Git 在线安装更新
 
 ```bash
+set -euo pipefail
+
 hermes -p "$PROFILE" plugins update credential-guard
 hermes -p "$PROFILE" gateway restart
+printf '%s\n' "PLUGIN_UPDATE_OK"
 ```
 
 ## ZIP 安装更新

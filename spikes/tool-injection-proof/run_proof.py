@@ -81,18 +81,8 @@ def _load_manager_and_spike():
     return mgr, spike
 
 
-def _invoke(
-    *,
-    tool_call_id: str,
-    approval: str,
-    spike,
-    ref: str = REF,
-) -> str:
-    from model_tools import handle_function_call
-
-    approved = approval == "approve"
-
-    def _gate(tool_name, reason, **kwargs):
+def _approval_gate(*, approved: bool, spike):
+    def gate(tool_name, reason, **kwargs):
         with spike._lock:
             order = spike._state.setdefault("call_order", [])
             if not order or order[-1] != "approval_gate":
@@ -107,8 +97,22 @@ def _invoke(
             "message": None if approved else "DENIED: r0 proof deny path",
         }
 
+    return gate
+
+
+def _invoke(
+    *,
+    tool_call_id: str,
+    approval: str,
+    spike,
+    ref: str = REF,
+    install_approval_patch: bool = True,
+) -> str:
+    from model_tools import handle_function_call
+
     args = {"token": ref, "note": "r0-proof"}
-    with patch("tools.approval.request_tool_approval", side_effect=_gate):
+
+    def invoke() -> str:
         return handle_function_call(
             "tip_probe_tool",
             deepcopy(args),
@@ -116,6 +120,13 @@ def _invoke(
             tool_call_id=tool_call_id,
             session_id="tip-session",
         )
+
+    if not install_approval_patch:
+        return invoke()
+
+    gate = _approval_gate(approved=approval == "approve", spike=spike)
+    with patch("tools.approval.request_tool_approval", side_effect=gate):
+        return invoke()
 
 
 def _has_secret_fragment(blob: str, secret: str, min_frag: int = MIN_FRAG) -> bool:
@@ -299,24 +310,33 @@ def run_scenario(scenario: str) -> Tuple[Dict[str, Any], List[str], Any]:
         )
         barrier = threading.Barrier(2)
         concurrent_errors: list[str] = []
+        concurrent_results: dict[str, str] = {}
 
         def conc(tcid: str, ref: str) -> None:
             try:
                 barrier.wait(timeout=10)
-                _invoke(tool_call_id=tcid, approval="approve", spike=spike, ref=ref)
+                concurrent_results[tcid] = _invoke(
+                    tool_call_id=tcid,
+                    approval="approve",
+                    spike=spike,
+                    ref=ref,
+                    install_approval_patch=False,
+                )
             except Exception as exc:
                 concurrent_errors.append(f"{tcid}:{type(exc).__name__}")
 
-        t1 = threading.Thread(
-            target=conc, args=("conc-1", "<CREDENTIAL:decoy_c1>")
-        )
-        t2 = threading.Thread(
-            target=conc, args=("conc-2", "<CREDENTIAL:decoy_c2>")
-        )
-        t1.start()
-        t2.start()
-        t1.join(timeout=30)
-        t2.join(timeout=30)
+        shared_gate = _approval_gate(approved=True, spike=spike)
+        with patch("tools.approval.request_tool_approval", side_effect=shared_gate):
+            t1 = threading.Thread(
+                target=conc, args=("conc-1", "<CREDENTIAL:decoy_c1>")
+            )
+            t2 = threading.Thread(
+                target=conc, args=("conc-2", "<CREDENTIAL:decoy_c2>")
+            )
+            t1.start()
+            t2.start()
+            t1.join(timeout=30)
+            t2.join(timeout=30)
 
         plans = dict(spike._state.get("plans") or {})
         received = list(spike._state.get("received_values") or [])
@@ -341,13 +361,22 @@ def run_scenario(scenario: str) -> Tuple[Dict[str, Any], List[str], Any]:
             and int(spike._state.get("next_call_count") or 0) == 2
             and len(received) == 2
         )
+        both_calls_succeeded = (
+            set(concurrent_results) == {"conc-1", "conc-2"}
+            and all('"ok": true' in value.lower() for value in concurrent_results.values())
+        )
         no_cross = bool(
-            seq_bind_ok and bind_ok and each_once and not concurrent_errors
+            seq_bind_ok
+            and bind_ok
+            and each_once
+            and both_calls_succeeded
+            and not concurrent_errors
         )
 
         once["concurrent_no_cross"] = no_cross
         once["concurrent_distinct_secret_binding"] = bool(seq_bind_ok and bind_ok)
         once["concurrent_each_next_call_once"] = bool(each_once)
+        once["concurrent_both_calls_succeeded"] = bool(both_calls_succeeded)
         once["concurrent_errors"] = concurrent_errors
         once["plans_keys"] = sorted(plans.keys())
         once["tool_received_plain_count"] = max(

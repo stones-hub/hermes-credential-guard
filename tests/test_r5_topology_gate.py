@@ -100,6 +100,9 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         # Current release distribution policy: the active tree ships only 0.4.2.
         # Historical release reports and freeze sidecars remain, but old binaries do not.
         "tests/test_current_dist_policy.py",
+        # 0.4.2 release-close README fail-closed structure and behavior gates.
+        "tests/test_readme_install_fail_closed.py",
+        "tests/test_readme_install_behavior.py",
         # R6 slice 4a: installed-ZIP approval-chain E2E (opt-in; outside
         # tests/test_*.py), shared ZIP install helpers, dedicated runner, and
         # the self-proving opt-in gate. Task file is the slice brief.
@@ -269,6 +272,11 @@ R5_MODIFIED_PATHS: FrozenSet[str] = frozenset(
         # file, so it is no longer byte-identical to the R5 baseline. Declared as
         # modified rather than left as a silently drifting preserved path.
         "tests/test_tool_injection_foundation.py",
+        # 0.4.2 release-close: the R0 proof runner's concurrent scenario now uses
+        # one process-global approval patch scope. Per-thread nested mock.patch
+        # contexts raced while restoring the same global function and dropped one
+        # synthetic invocation; production credential_guard code is unchanged.
+        "spikes/tool-injection-proof/run_proof.py",
         # R6 slice 2: the `real_build` marker used by the opt-in check module is
         # registered here. Only the marker line was added -- no environment
         # variable and no authorization channel (禁 2).
