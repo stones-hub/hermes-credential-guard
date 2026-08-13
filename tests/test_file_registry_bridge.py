@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from credential_guard.config import CONFIG_FILENAME
-from credential_guard.middleware import SAFE_BLOCK_MESSAGE, on_llm_execution
+from credential_guard.middleware import SAFE_BLOCK_MESSAGE, is_blocked_response_content, on_llm_execution
 from credential_guard.models import make_token_id
 from credential_guard.state import get_registry
 
@@ -112,14 +112,15 @@ def _assert_exec_fail_closed(canary: str) -> None:
     )
     assert calls == []
     assert getattr(blocked, "model", "") == "credential-guard-blocked"
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    assert is_blocked_response_content(blocked.choices[0].message.content)
     blob = str(blocked)
     assert canary not in blob
-    # Fixed safety message only — no raw exception text.
+    # Actionable guidance may name the config basename; forbid internals/paths.
     assert "Traceback" not in blob
     assert "FileBackendError" not in blob
     assert "credential store" not in blob.lower()
-    assert CONFIG_FILENAME not in blob
+    assert "/Users/" not in blob
+    assert "CG-CONFIG-UNAVAILABLE" in blocked.choices[0].message.content
 
 
 def test_t2_missing_unified_config_fail_closed(isolated_hermes_home):
@@ -260,7 +261,7 @@ def test_t2_identity_conflict_with_base_registry_fail_closed(isolated_hermes_hom
     blob = str(blocked)
     assert canary_file not in blob
     assert canary_base not in blob
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    assert is_blocked_response_content(blocked.choices[0].message.content)
 
 
 def test_t3_tool_result_text_and_json_use_file_snapshot(isolated_hermes_home):

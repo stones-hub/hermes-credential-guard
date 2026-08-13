@@ -7,7 +7,7 @@ from urllib.parse import quote, quote_plus
 
 import pytest
 
-from credential_guard.middleware import SAFE_BLOCK_MESSAGE, on_llm_execution, on_llm_request
+from credential_guard.middleware import SAFE_BLOCK_MESSAGE, is_blocked_response_content, on_llm_execution, on_llm_request
 from credential_guard.state import get_registry
 
 
@@ -77,7 +77,7 @@ def test_llm_execution_blocks_when_internal_failure_without_calling_downstream(m
     )
     assert len(calls) == 0
     assert getattr(blocked, "model", "") == "credential-guard-blocked"
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    assert is_blocked_response_content(blocked.choices[0].message.content)
     assert blocked.choices[0].message.tool_calls is None
 
 

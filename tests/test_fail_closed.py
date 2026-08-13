@@ -6,7 +6,7 @@ import os
 import pytest
 
 from credential_guard.hooks import on_transform_tool_result
-from credential_guard.middleware import SAFE_BLOCK_MESSAGE, on_llm_execution, on_llm_request
+from credential_guard.middleware import SAFE_BLOCK_MESSAGE, is_blocked_response_content, on_llm_execution, on_llm_request
 from credential_guard.result_guard import RESULT_GUARD_FAIL_TEXT
 from credential_guard.state import get_registry
 
@@ -87,7 +87,7 @@ def test_llm_execution_get_registry_failure_does_not_call_next(monkeypatch):
     )
     assert calls == []
     assert getattr(blocked, "model", "") == "credential-guard-blocked"
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    assert is_blocked_response_content(blocked.choices[0].message.content)
     assert blocked.choices[0].message.tool_calls is None
     assert DECOY not in str(blocked)
 

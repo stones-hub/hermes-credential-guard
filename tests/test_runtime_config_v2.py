@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from credential_guard.config import CONFIG_FILENAME
-from credential_guard.middleware import SAFE_BLOCK_MESSAGE, on_llm_execution, on_llm_request
+from credential_guard.middleware import SAFE_BLOCK_MESSAGE, is_blocked_response_content, on_llm_execution, on_llm_request
 from credential_guard.models import make_token_id
 from credential_guard.state import get_egress_registry_snapshot, get_registry
 
@@ -152,12 +152,14 @@ def _assert_exec_blocked(canary: str) -> None:
     )
     assert calls == []
     assert getattr(blocked, "model", "") == "credential-guard-blocked"
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    assert is_blocked_response_content(blocked.choices[0].message.content)
     blob = str(blocked)
     assert canary not in blob
     assert "Traceback" not in blob
-    assert "credential-guard.json" not in blob
-    assert "CONFIG_" not in blob
+    # Product guidance may mention the config basename; forbid raw exception names.
+    assert "RuntimeConfigError" not in blob
+    assert "/Users/" not in blob
+    assert "CG-CONFIG-UNAVAILABLE" in blocked.choices[0].message.content
 
 
 # ---------------------------------------------------------------------------

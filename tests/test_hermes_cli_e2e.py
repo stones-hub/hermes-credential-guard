@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from credential_guard.middleware import SAFE_BLOCK_MESSAGE
+from credential_guard.middleware import BLOCK_RESPONSE_TITLE, SAFE_BLOCK_MESSAGE
 from credential_guard.sensitive_paths import (
     MAX_PRIVATE_KEY_CANDIDATE_LENGTH,
     MAX_PRIVATE_KEY_SCAN_BYTES,
@@ -221,7 +221,7 @@ def test_hermes_chat_fail_closed_llm_execution_http_zero_exit_zero(tmp_path):
             f"fail-closed must exit 0; got {result.returncode}; "
             f"stdout={result.stdout[-1500]!r} stderr={result.stderr[-1500]!r}"
         )
-        assert "request blocked by credential-guard" in result.stdout
+        assert BLOCK_RESPONSE_TITLE in result.stdout
         assert DECOY_SECRET not in result.stdout
         assert DECOY_SECRET not in result.stderr
         assert_all_loopback(read_net_audit(iso))
@@ -266,7 +266,7 @@ def test_hermes_chat_fail_closed_llm_request_provider_zero(tmp_path):
             f"stdout={(result.stdout or '')[-1500]!r} "
             f"stderr={(result.stderr or '')[-1500]!r}"
         )
-        assert "request blocked by credential-guard" in (result.stdout or "")
+        assert BLOCK_RESPONSE_TITLE in (result.stdout or "")
         assert DECOY_SECRET not in (result.stdout or "")
         assert DECOY_SECRET not in (result.stderr or "")
         joined = b"".join(new_bodies)

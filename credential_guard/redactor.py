@@ -19,6 +19,10 @@ MAX_TOTAL_VARIANT_CHARS = 16_777_216
 class RedactionCollisionError(RuntimeError):
     """Raised when redacting dict keys would collide and silently overwrite."""
 
+    def __init__(self, message: str = "dict key collision after redaction", *, path: tuple = ()):
+        super().__init__(message)
+        self.path = tuple(path)
+
 
 class VariantBuildError(RuntimeError):
     """Raised when protected-variant construction fails or exceeds bounds."""
@@ -139,21 +143,157 @@ def redact_text(text: str, registry: CredentialRegistry) -> str:
     return redacted
 
 
-def redact_payload(payload: Any, registry: CredentialRegistry) -> Any:
+_SAFE_PATH_KEYS = frozenset(
+    {
+        "model",
+        "messages",
+        "role",
+        "content",
+        "name",
+        "tool_calls",
+        "function",
+        "arguments",
+        "tools",
+        "tool_call_id",
+        "metadata",
+        "temperature",
+        "max_tokens",
+        "stream",
+        "user",
+        "system",
+        "assistant",
+        "tool",
+    }
+)
+
+# Minimal Hermes/Provider skeleton keys — never auto-renamed to placeholders.
+_CORE_PROTOCOL_KEYS = frozenset(
+    {
+        "model",
+        "messages",
+        "role",
+        "content",
+        "tool_calls",
+        "function",
+        "arguments",
+        "tools",
+        "name",
+        "tool_call_id",
+    }
+)
+
+
+def _path_segment(key: Any) -> Any:
+    """Structural path segment only — never echo arbitrary/secret dict keys."""
+    if isinstance(key, int):
+        return key
+    if isinstance(key, str) and key in _SAFE_PATH_KEYS:
+        return key
+    return "<key>"
+
+
+def _allocate_safe_sensitive_keys(count: int, occupied: set) -> List[str]:
+    """Stable unique placeholders; skip numbers already present in the dict."""
+    allocated: List[str] = []
+    n = 1
+    while len(allocated) < count:
+        candidate = f"<REDACTED_SENSITIVE_KEY_{n}>"
+        n += 1
+        if candidate in occupied:
+            continue
+        occupied.add(candidate)
+        allocated.append(candidate)
+    return allocated
+
+
+def redact_payload(
+    payload: Any, registry: CredentialRegistry, *, _path: tuple = ()
+) -> Any:
     if isinstance(payload, str):
         return redact_text(payload, registry)
     if isinstance(payload, dict):
-        out: dict[Any, Any] = {}
+        prepared: List[Tuple[Any, Any, Any]] = []
         for key, value in payload.items():
-            new_key = redact_text(key, registry) if isinstance(key, str) else key
-            if new_key in out:
-                raise RedactionCollisionError("dict key collision after redaction")
-            out[new_key] = redact_payload(value, registry)
+            if isinstance(key, str):
+                new_key = redact_text(key, registry)
+                # Core protocol skeleton cannot be silently rewritten.
+                if key in _CORE_PROTOCOL_KEYS and new_key != key:
+                    raise RedactionCollisionError(
+                        "dict key collision after redaction",
+                        path=_path + ("<key>",),
+                    )
+            else:
+                new_key = key
+            child_path = _path + (_path_segment(key),)
+            prepared.append(
+                (key, new_key, redact_payload(value, registry, _path=child_path))
+            )
+
+        groups: dict[Any, List[int]] = {}
+        for idx, (_orig_key, new_key, _value) in enumerate(prepared):
+            groups.setdefault(new_key, []).append(idx)
+
+        final_keys: List[Any] = [None] * len(prepared)
+        rename_indices: List[int] = []
+        for _new_key, indices in groups.items():
+            if len(indices) == 1:
+                final_keys[indices[0]] = prepared[indices[0]][1]
+                continue
+
+            core_idxs = [
+                i
+                for i in indices
+                if isinstance(prepared[i][0], str)
+                and prepared[i][0] in _CORE_PROTOCOL_KEYS
+            ]
+            non_core_idxs = [i for i in indices if i not in set(core_idxs)]
+            if len(core_idxs) > 1:
+                raise RedactionCollisionError(
+                    "dict key collision after redaction",
+                    path=_path + ("<key>",),
+                )
+            if core_idxs:
+                # Keep the untouched core key; anonymize only ordinary members.
+                ci = core_idxs[0]
+                orig_core, new_core, _val = prepared[ci]
+                if new_core != orig_core:
+                    raise RedactionCollisionError(
+                        "dict key collision after redaction",
+                        path=_path + ("<key>",),
+                    )
+                final_keys[ci] = orig_core
+                rename_indices.extend(non_core_idxs)
+            else:
+                # Ordinary dynamic collision: rename the whole group so no
+                # member keeps a security token / plain secret as the key.
+                rename_indices.extend(indices)
+
+        occupied = {key for key in final_keys if key is not None}
+        rename_indices.sort()
+        safe_keys = _allocate_safe_sensitive_keys(len(rename_indices), occupied)
+        for idx, safe_key in zip(rename_indices, safe_keys):
+            final_keys[idx] = safe_key
+
+        out: dict[Any, Any] = {}
+        for idx, (_orig_key, _new_key, value) in enumerate(prepared):
+            final_key = final_keys[idx]
+            if final_key in out:
+                raise RedactionCollisionError(
+                    "dict key collision after redaction",
+                    path=_path + ("<key>",),
+                )
+            out[final_key] = value
         return out
     if isinstance(payload, list):
-        return [redact_payload(item, registry) for item in payload]
+        return [
+            redact_payload(item, registry, _path=_path + (idx,))
+            for idx, item in enumerate(payload)
+        ]
     if isinstance(payload, tuple):
-        return tuple(redact_payload(item, registry) for item in payload)
+        return tuple(
+            redact_payload(item, registry, _path=_path + (idx,))
+            for idx, item in enumerate(payload)
+        )
     return payload
 
 

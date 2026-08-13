@@ -10,7 +10,7 @@ import pytest
 
 from credential_guard.approval import on_pre_tool_call
 from credential_guard.hooks import on_transform_tool_result
-from credential_guard.middleware import SAFE_BLOCK_MESSAGE, on_llm_execution, on_llm_request
+from credential_guard.middleware import SAFE_BLOCK_MESSAGE, is_blocked_response_content, on_llm_execution, on_llm_request
 from credential_guard.result_guard import REDACTED_SECRET, RESULT_GUARD_FAIL_TEXT
 from credential_guard.sensitive_paths import (
     contains_private_key_material,
@@ -259,19 +259,26 @@ def test_transform_tool_result_blocks_protected_path_result(tmp_path: Path, monk
     assert json.loads(out)["error"]
 
 
-def test_llm_execution_blocks_private_key_residue():
-    calls = {"n": 0}
+def test_llm_execution_redacts_locatable_raw_pem_then_calls_provider():
+    """Complete raw PEM is replaced; provider sees zero plaintext key bytes."""
+    from credential_guard.result_guard import REDACTED_SECRET
 
-    def next_call(_req):
-        calls["n"] += 1
-        raise AssertionError("provider must not be called")
+    calls = []
+
+    def next_call(req):
+        calls.append(req)
+        return {"ok": True}
 
     resp = on_llm_execution(
         request={"messages": [{"role": "user", "content": OPENSSH_KEY}]},
         next_call=next_call,
     )
-    assert calls["n"] == 0
-    assert SAFE_BLOCK_MESSAGE in str(getattr(resp.choices[0].message, "content", ""))
+    assert resp == {"ok": True}
+    assert len(calls) == 1
+    sent = json.dumps(calls[0], ensure_ascii=False)
+    assert "BEGIN OPENSSH PRIVATE KEY" not in sent
+    assert OPENSSH_KEY not in sent
+    assert REDACTED_SECRET in calls[0]["messages"][0]["content"]
 
 
 def test_llm_request_redacts_or_fail_closes_private_key():
@@ -337,7 +344,7 @@ def _urlsafe_distinct_synthetic_pem_b64() -> tuple[str, str, str]:
 
 
 def test_urlsafe_b64_pem_with_dash_or_underscore_blocked(tmp_path, monkeypatch):
-    """URL-safe Base64 PEM that truly uses -/_ must hit helper + provider/tool gates."""
+    """URL-safe Base64 PEM with -/_ : detect, whole-field replace on provider, tool fail-closed."""
     import base64
 
     # Normal pass-through assertions require an available isolated egress store.
@@ -355,6 +362,8 @@ def test_urlsafe_b64_pem_with_dash_or_underscore_blocked(tmp_path, monkeypatch):
     os.chmod(cfg, 0o600)
     monkeypatch.setenv("HERMES_HOME", str(hermes))
 
+    from credential_guard.middleware import REDACTED_UNRESOLVED_SENSITIVE_FIELD
+
     pem, std, url = _urlsafe_distinct_synthetic_pem_b64()
     assert contains_private_key_material(url) is True
     assert contains_private_key_material(std) is True
@@ -364,21 +373,26 @@ def test_urlsafe_b64_pem_with_dash_or_underscore_blocked(tmp_path, monkeypatch):
         request={"messages": [{"role": "user", "content": url}]},
         next_call=lambda r: calls.append(r) or {"ok": True},
     )
-    assert calls == []
-    assert SAFE_BLOCK_MESSAGE in str(getattr(resp.choices[0].message, "content", ""))
+    assert len(calls) == 1
+    assert resp == {"ok": True}
+    assert calls[0]["messages"][0]["content"] == REDACTED_UNRESOLVED_SENSITIVE_FIELD
+    assert url not in json.dumps(calls[0], ensure_ascii=False)
+    assert "BEGIN OPENSSH PRIVATE KEY" not in json.dumps(calls[0], ensure_ascii=False)
 
     tool_out = on_transform_tool_result(result=url, tool_name="dummy", arguments={})
     assert tool_out == RESULT_GUARD_FAIL_TEXT
     assert "BEGIN OPENSSH PRIVATE KEY" not in tool_out
     assert tool_out.count(url) == 0
 
-    # Standard Base64 PEM still blocked.
+    # Standard Base64 PEM: whole-field replace then continue (Provider=1, zero leak).
     std_calls: list = []
     on_llm_execution(
         request={"messages": [{"role": "user", "content": std}]},
         next_call=lambda r: std_calls.append(r) or {"ok": True},
     )
-    assert std_calls == []
+    assert len(std_calls) == 1
+    assert std_calls[0]["messages"][0]["content"] == REDACTED_UNRESOLVED_SENSITIVE_FIELD
+    assert std not in json.dumps(std_calls[0], ensure_ascii=False)
 
     # Ordinary URL-safe Base64 / cert / pubkey must not false-block.
     # Payload chosen so urlsafe form truly contains '-' and differs from std b64.
@@ -400,7 +414,7 @@ def test_urlsafe_b64_pem_with_dash_or_underscore_blocked(tmp_path, monkeypatch):
 
 
 def test_t5_encoded_pem_blocked_on_provider_and_tool_result(tmp_path, monkeypatch):
-    """percent / b64 / urlsafe-b64 / JSON-escape PEM must not reach provider or model."""
+    """percent / b64 / urlsafe-b64 / JSON-escape PEM must not egress as raw material."""
     import base64
     import secrets
     from urllib.parse import quote
@@ -441,13 +455,24 @@ def test_t5_encoded_pem_blocked_on_provider_and_tool_result(tmp_path, monkeypatc
             request={"messages": [{"role": "user", "content": encoded}]},
             next_call=next_call,
         )
-        assert calls == [], label
-        assert SAFE_BLOCK_MESSAGE in str(
-            getattr(resp.choices[0].message, "content", "")
-        )
         blob = str(resp)
         assert marker not in blob
         assert encoded not in blob
+        from credential_guard.middleware import REDACTED_UNRESOLVED_SENSITIVE_FIELD
+
+        assert len(calls) == 1, label
+        sent = json.dumps(calls[0], ensure_ascii=False)
+        assert marker not in sent
+        assert encoded not in sent
+        assert "BEGIN OPENSSH PRIVATE KEY" not in sent
+        if label == "esc":
+            # JSON-escaped PEM still contains BEGIN/END markers → localizable redact.
+            assert REDACTED_SECRET in calls[0]["messages"][0]["content"]
+        else:
+            # Boundary-unknown encodings → whole-field placeholder, continue.
+            assert (
+                calls[0]["messages"][0]["content"] == REDACTED_UNRESOLVED_SENSITIVE_FIELD
+            )
 
         tool_out = on_transform_tool_result(
             result=encoded, tool_name="dummy", arguments={}

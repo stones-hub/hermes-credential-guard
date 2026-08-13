@@ -8,7 +8,7 @@ import os
 import pytest
 
 from credential_guard.hooks import on_transform_tool_result
-from credential_guard.middleware import SAFE_BLOCK_MESSAGE, on_llm_execution, on_llm_request
+from credential_guard.middleware import SAFE_BLOCK_MESSAGE, is_blocked_response_content, on_llm_execution, on_llm_request
 from credential_guard.redactor import (
     MAX_REGISTRY_ITEMS,
     MAX_SECRET_LENGTH,
@@ -51,7 +51,7 @@ def _assert_exec_blocked(secret: str) -> None:
     )
     assert calls == []
     assert getattr(blocked, "model", "") == "credential-guard-blocked"
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    assert is_blocked_response_content(blocked.choices[0].message.content)
     assert secret not in str(blocked)
 
 
@@ -248,17 +248,30 @@ def test_t6_encoded_private_key_scanner_overlimit_fail_closed():
     huge = "A" * (MAX_PRIVATE_KEY_SCAN_BYTES + 10)
     with pytest.raises(EncodedPrivateKeyScanError):
         contains_private_key_material(huge)
-    # Full oversized payload must block downstream without echoing body.
+    # Single-field over budget → CG-SCANNER-ERROR (not a session-total-size code).
     calls = []
     blocked = on_llm_execution(
-        request={"messages": [{"content": huge}]},
+        request={"messages": [{"role": "user", "content": huge}]},
         next_call=lambda req: calls.append(req) or {"ok": True},
     )
     assert calls == []
-    assert SAFE_BLOCK_MESSAGE in str(blocked.choices[0].message.content)
+    text = blocked.choices[0].message.content
+    assert is_blocked_response_content(text)
+    assert "代码：CG-SCANNER-ERROR" in text
+    assert "CG-REQUEST-SIZE-BUG" not in text
+    # Current-user oversize: actionable edit/split hint — not a whole-Session size bug.
+    assert "总大小" not in text
+    assert "Session 太长" not in text
+    assert "整个 Session" not in text
+    assert "位置：" in text
+    assert "处理：" in text
+    assert "编辑或分段" in text
+    assert "无需新建 Session" in text
     assert huge not in str(blocked)
 
-    out = on_llm_request(request={"messages": [{"content": huge}]})
+    out = on_llm_request(
+        request={"messages": [{"role": "user", "content": huge}]}
+    )
     assert huge not in json.dumps(out)
     assert out["request"]["messages"][0]["content"] == SAFE_BLOCK_MESSAGE
 

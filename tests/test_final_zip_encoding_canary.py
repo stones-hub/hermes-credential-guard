@@ -106,7 +106,16 @@ def test_urlsafe_distinct_synthetic_pem_b64_diverges():
     # Do not print pem/url bodies.
 
 
-def test_probe_urlsafe_pem_provider_bound_blocks():
+def test_probe_urlsafe_pem_provider_bound_live_source_whole_field_replace():
+    """Live source: urlsafe PEM is detected, whole-field replaced, Provider=1.
+
+    Historical ZIP canary evaluator still requires provider_call_count==0 against
+    the frozen installed artifact; this live-source probe tracks current product
+    rules (continue after unresolved-field placeholder).
+    """
+    from credential_guard.middleware import REDACTED_UNRESOLVED_SENSITIVE_FIELD
+    from credential_guard.result_guard import RESULT_GUARD_FAIL_TEXT
+
     mod = _load()
     _pem, _std, url = mod.urlsafe_distinct_synthetic_pem_b64()
     probe = mod.probe_urlsafe_pem_provider_bound(
@@ -117,10 +126,17 @@ def test_probe_urlsafe_pem_provider_bound_blocks():
     )
     assert probe["urlsafe_pem_has_url_alphabet"] is True
     assert probe["urlsafe_pem_helper_detected"] is True
-    assert probe["urlsafe_pem_provider_call_count"] == 0
-    # Script still compares against pre-R4 SAFE JSON; current source semantics use
-    # RESULT_GUARD_FAIL_TEXT. Validate live hook directly — do not claim ZIP has R4.
-    from credential_guard.result_guard import RESULT_GUARD_FAIL_TEXT
+    assert probe["urlsafe_pem_provider_call_count"] == 1
+
+    calls: list = []
+    result = on_llm_execution(
+        request={"messages": [{"role": "user", "content": url}]},
+        next_call=lambda r: calls.append(r) or {"ok": True},
+    )
+    assert result == {"ok": True}
+    assert len(calls) == 1
+    assert calls[0]["messages"][0]["content"] == REDACTED_UNRESOLVED_SENSITIVE_FIELD
+    assert url not in json.dumps(calls[0], ensure_ascii=False)
 
     live_tool = on_transform_tool_result(result=url, tool_name="dummy", arguments={})
     assert live_tool == RESULT_GUARD_FAIL_TEXT

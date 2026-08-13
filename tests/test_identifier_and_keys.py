@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from credential_guard.models import make_token_id
-from credential_guard.redactor import RedactionCollisionError, redact_payload
+from credential_guard.redactor import redact_payload
 from credential_guard.registry import (
     MAX_IDENTIFIER_LENGTH,
     CredentialRegistry,
@@ -51,15 +51,23 @@ def test_redacts_dict_string_keys_and_values():
     assert redacted[f"prefix_{item.token}_suffix"] == item.token
 
 
-def test_dict_key_collision_after_redaction_fails_closed():
+def test_dict_key_collision_after_redaction_uses_unique_safe_keys():
     registry = CredentialRegistry()
     item = registry.register("db", "password", "COLLIDE_SECRET_1")
     payload = {
         "COLLIDE_SECRET_1": "a",
         item.token: "b",
     }
-    with pytest.raises(RedactionCollisionError):
-        redact_payload(payload, registry)
+    original = dict(payload)
+    redacted = redact_payload(payload, registry)
+    assert payload == original
+    assert list(redacted.keys()) == [
+        "<REDACTED_SENSITIVE_KEY_1>",
+        "<REDACTED_SENSITIVE_KEY_2>",
+    ]
+    assert list(redacted.values()) == ["a", "b"]
+    assert item.token not in redacted
+    assert "COLLIDE_SECRET_1" not in redacted
 
 
 def test_token_never_embeds_raw_secret_even_if_key_were_secretish():

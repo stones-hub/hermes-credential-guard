@@ -185,6 +185,31 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         "dist/credential-guard-0.4.2-hermes-plugin.zip",
         "dist/hermes_credential_guard-0.4.2-py3-none-any.whl",
         "dist/hermes_credential_guard-0.4.2.tar.gz",
+        # Long-session false-block + actionable BlockDetail UX narrow fix.
+        ".cg-long-session-block-ux-task.md",
+        "tests/test_long_session_block_ux.py",
+        # Block UX: never echo untrusted tool name in location text.
+        ".cg-block-ux-tool-name-fix-task.md",
+        # Block-message structure gate: reject malformed / unknown-code prompts.
+        ".cg-block-message-structure-gate-fix-task.md",
+        "tests/test_block_message_structure_gate.py",
+        # Unresolved private-key boundary → provider-bound whole-field replace.
+        ".cg-unresolved-field-redaction-task.md",
+        "tests/test_unresolved_field_redaction.py",
+        # Ordinary dynamic key collision → unique safe keys → session continuity.
+        ".cg-collision-continuity-task.md",
+        "tests/test_collision_continuity.py",
+        # Evidence gate: safe keys are sequential, not SHA-256(content) derived.
+        ".cg-collision-hash-gate-task.md",
+        # CG-RESIDUAL-SECRET long-session auto-recovery (history quarantine).
+        ".cg-residual-session-recovery-task.md",
+        ".cg-residual-session-recovery-round2-task.md",
+        "tests/test_residual_session_recovery.py",
+        # CG-SCANNER-ERROR long-session field-level recovery.
+        ".cg-scanner-error-session-recovery-task.md",
+        ".cg-scanner-error-session-recovery-round2-task.md",
+        ".cg-scanner-error-session-recovery-round3-task.md",
+        "tests/test_scanner_error_session_recovery.py",
     }
 )
 
@@ -308,6 +333,17 @@ R5_MODIFIED_PATHS: FrozenSet[str] = frozenset(
         "tests/test_r3a_http_binding_schema.py",
         "tests/test_r3a_production_transport.py",
         "tests/test_r3c_evidence_authenticity_gate.py",
+        # Long-session UX: path-aware redaction collision + block-message asserts.
+        "credential_guard/redactor.py",
+        "tests/test_fail_closed.py",
+        "tests/test_request_guard.py",
+        "tests/test_variant_limits.py",
+        # Collision continuity: ordinary dynamic key collisions continue with
+        # unique safe keys (historical fail-closed assertion superseded).
+        "tests/test_identifier_and_keys.py",
+        # Unresolved-field redaction: live-source URL-safe PEM probe now expects
+        # whole-field replace + Provider=1 (historical ZIP evaluator unchanged).
+        "tests/test_final_zip_encoding_canary.py",
     }
 )
 

@@ -14,6 +14,7 @@ import pytest
 
 from credential_guard.middleware import (
     SAFE_BLOCK_MESSAGE,
+    is_blocked_response_content,
     on_llm_execution,
     on_llm_request,
 )
@@ -183,7 +184,11 @@ def test_r7_t2_overlong_encoding_like_candidate_still_fail_closed():
         next_call=lambda req: calls.append(req) or {"ok": True},
     )
     assert calls == []
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    text = blocked.choices[0].message.content
+    assert is_blocked_response_content(text)
+    assert "代码：CG-SCANNER-ERROR" in text
+    assert "CG-REQUEST-SIZE-BUG" not in text
+    assert "总大小" not in text
 
 
 # ---------------------------------------------------------------------------
@@ -192,17 +197,42 @@ def test_r7_t2_overlong_encoding_like_candidate_still_fail_closed():
 
 
 def test_r7_a1_fully_unicode_escaped_pem_in_long_text_is_detected():
-    """A1: synthetic PEM as per-char \\uXXXX inside long prose must be detected."""
+    """A1: synthetic PEM as per-char \\uXXXX inside long prose must be detected.
+
+    Boundary-unknown ordinary string fields are whole-field replaced and the
+    request continues (Provider=1); sensitive material must not egress.
+    """
+    from credential_guard.middleware import (
+        LocalBlockRequest,
+        REDACTED_UNRESOLVED_SENSITIVE_FIELD,
+    )
+
     text = _long_text_with_fully_unicode_escaped_pem()
     assert contains_private_key_material(text) is True
 
+    request = {
+        "model": "fake-model",
+        "messages": [{"role": "user", "content": text}],
+    }
+    original = deepcopy(request)
+    out = on_llm_request(request=request)
+    assert not isinstance(out["request"], LocalBlockRequest)
+    assert out["request"]["messages"][0]["content"] == REDACTED_UNRESOLVED_SENSITIVE_FIELD
+    assert request == original
+
     calls = []
-    blocked = on_llm_execution(
-        request={"model": "fake-model", "messages": [{"role": "user", "content": text}]},
+    result = on_llm_execution(
+        request=out["request"],
         next_call=lambda req: calls.append(req) or {"ok": True},
     )
-    assert calls == [], "encoded PEM in long text must not reach downstream"
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    assert result == {"ok": True}
+    assert len(calls) == 1
+    sent = json.dumps(calls[0], ensure_ascii=False)
+    assert text not in sent
+    assert OPENSSH_KEY not in sent
+    assert "BEGIN OPENSSH PRIVATE KEY" not in sent
+    assert "PRIVATE KEY" not in sent
+    assert calls[0]["messages"][0]["content"] == REDACTED_UNRESOLVED_SENSITIVE_FIELD
 
 
 def test_r7_a3_mutation_whole_text_decode_skip_is_load_bearing(monkeypatch):
@@ -455,7 +485,7 @@ def test_r7_b1_true_fail_closed_local_terminate_zero_provider(monkeypatch):
         next_call=lambda r: calls.append(r) or {"ok": True},
     )
     assert calls == []
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    assert is_blocked_response_content(blocked.choices[0].message.content)
     assert getattr(blocked, "model", "") == "credential-guard-blocked"
 
 
@@ -485,7 +515,7 @@ def test_r7_b1_hermes_deepcopy_preserves_true_local_block(monkeypatch):
         next_call=lambda r: calls.append(r) or {"ok": True},
     )
     assert calls == []
-    assert blocked.choices[0].message.content == SAFE_BLOCK_MESSAGE
+    assert is_blocked_response_content(blocked.choices[0].message.content)
 
 
 def test_r7_b1_mutation_drop_local_block_consumption_is_red(monkeypatch):
