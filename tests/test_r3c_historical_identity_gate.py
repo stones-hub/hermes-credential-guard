@@ -798,6 +798,17 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         ".cg-scanner-error-session-recovery-round2-task.md",
         ".cg-scanner-error-session-recovery-round3-task.md",
         "tests/test_scanner_error_session_recovery.py",
+        # R9 / 0.4.3 release closeout (non-dist paths; dist/ skipped by enumerator).
+        ".cg-043-release-closeout-task.md",
+        ".cg-043-source-fallback-round2-task.md",
+        "docs/R9-0.4.3-长Session连续性修复方案.md",
+        "docs/R9-0.4.3-验收报告.md",
+        "docs/R9-0.4.3-Release-Notes.md",
+        "tests/test_protocol_field_whole_field_fallback.py",
+        "tests/r9_043_final_zip_e2e.py",
+        "tests/test_r9_043_final_zip_optin_gate.py",
+        "scripts/run_r9_043_final_zip_e2e.py",
+        "scripts/run_r9_043_final_zip_tests.py",
         # scripts/run_final_zip_encoding_canary.py is baseline-era (modified only);
         # it stays out of this delta and is declared in R5_MODIFIED_PATHS.
     }

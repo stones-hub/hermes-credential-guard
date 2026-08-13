@@ -2,7 +2,7 @@
 
 Credential Guard 是一个独立的 Hermes 插件，用于保护本机凭证，并在用户人工批准后让 Hermes 使用凭证执行受限操作，而不把真实凭证交给模型。
 
-当前版本：`0.4.2`
+当前版本：`0.4.3`
 
 ```text
 credentials = 要保护的秘密
@@ -64,7 +64,7 @@ bindings    = 允许申请执行的固定能力
 - 已安装支持原生插件的 Hermes Agent；
 - macOS 或 Linux；
 - Python 3.9 及以上；
-- 当前 `0.4.2` 无第三方 Python 运行依赖。
+- 当前 `0.4.3` 无第三方 Python 运行依赖。
 
 > Credential Guard 是纯 Python 目录插件。正式插件 ZIP 解压后即可加载，用户不需要运行 `pip install`、`npm build`、`make` 或其他构建命令。
 
@@ -106,7 +106,7 @@ hermes -p "$PROFILE" plugins update credential-guard
 本地安装必须使用正式制品：
 
 ```text
-credential-guard-0.4.2-hermes-plugin.zip
+credential-guard-0.4.3-hermes-plugin.zip
 ```
 
 不要把 GitHub 自动生成的 `Source code.zip` 当作正式插件 ZIP。
@@ -117,12 +117,12 @@ credential-guard-0.4.2-hermes-plugin.zip
 set -euo pipefail
 
 PROFILE="default"
-PLUGIN_ZIP="/path/to/credential-guard-0.4.2-hermes-plugin.zip"
-EXPECTED_SHA256="95d96aa82f64701dfc0b5862ba3671feb98b7d5c07a61f350dbe65287fb60ccf"
+PLUGIN_ZIP="/path/to/credential-guard-0.4.3-hermes-plugin.zip"
+EXPECTED_SHA256="738bc8ae4e1973a50efba604602a9fb3c7a6739efb95e48024b6a1975e97dacb"
 CONFIG_PATH="$(hermes -p "$PROFILE" config path)"
 PROFILE_ROOT="$(dirname "$CONFIG_PATH")"
 PLUGIN_DIR="$PROFILE_ROOT/plugins/credential-guard"
-STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/credential-guard-0.4.2.XXXXXX")"
+STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/credential-guard-0.4.3.XXXXXX")"
 ACTUAL_SHA256="$(shasum -a 256 "$PLUGIN_ZIP" | cut -d ' ' -f 1)"
 
 if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
@@ -145,7 +145,7 @@ set -euo pipefail
 unzip -q "$PLUGIN_ZIP" -d "$STAGE_DIR"
 test -f "$STAGE_DIR/credential-guard/plugin.yaml"
 test -f "$STAGE_DIR/credential-guard/__init__.py"
-grep -qx 'version: 0.4.2' "$STAGE_DIR/credential-guard/plugin.yaml"
+grep -qx 'version: 0.4.3' "$STAGE_DIR/credential-guard/plugin.yaml"
 test ! -e "$STAGE_DIR/credential-guard/credential-guard"
 printf '%s\n' "ZIP_STRUCTURE_OK"
 ```
@@ -153,7 +153,7 @@ printf '%s\n' "ZIP_STRUCTURE_OK"
 预期版本：
 
 ```text
-version: 0.4.2
+version: 0.4.3
 ```
 
 ZIP 应只有一层插件根目录：
@@ -177,7 +177,7 @@ mkdir -p "$PROFILE_ROOT/plugins"
 test ! -e "$PLUGIN_DIR"
 cp -R "$STAGE_DIR/credential-guard" "$PLUGIN_DIR"
 test -f "$PLUGIN_DIR/plugin.yaml"
-grep -qx 'version: 0.4.2' "$PLUGIN_DIR/plugin.yaml"
+grep -qx 'version: 0.4.3' "$PLUGIN_DIR/plugin.yaml"
 test ! -e "$PLUGIN_DIR/credential-guard"
 printf '%s\n' "PLUGIN_INSTALL_OK"
 ```
@@ -196,7 +196,7 @@ test -d "$BACKUP_DIR"
 test ! -e "$PLUGIN_DIR"
 cp -R "$STAGE_DIR/credential-guard" "$PLUGIN_DIR"
 test -f "$PLUGIN_DIR/plugin.yaml"
-grep -qx 'version: 0.4.2' "$PLUGIN_DIR/plugin.yaml"
+grep -qx 'version: 0.4.3' "$PLUGIN_DIR/plugin.yaml"
 test ! -e "$PLUGIN_DIR/credential-guard"
 printf '%s\n' "PLUGIN_UPGRADE_OK"
 ```
@@ -789,12 +789,12 @@ $PROFILE_ROOT/credential-guard/
 
 # 当前边界
 
-0.4.2 正式保护：
+0.4.3 正式保护：
 
 - Hermes 主聊天 conversation loop 的模型请求；
 - 主链工具结果。
 
-0.4.2 不保证覆盖：
+0.4.3 不保证覆盖：
 
 - 自动标题；
 - 上下文压缩；
@@ -838,10 +838,10 @@ CG_R6_BUILD_AUTHORIZED=1 .venv/bin/python scripts/build_release_artifacts.py
 正式发布物包括：
 
 ```text
-dist/credential-guard-0.4.2-hermes-plugin.zip
-dist/artifact-manifest-0.4.2.json
-dist/hermes_credential_guard-0.4.2-py3-none-any.whl
-dist/hermes_credential_guard-0.4.2.tar.gz
+dist/credential-guard-0.4.3-hermes-plugin.zip
+dist/artifact-manifest-0.4.3.json
+dist/hermes_credential_guard-0.4.3-py3-none-any.whl
+dist/hermes_credential_guard-0.4.3.tar.gz
 ```
 
 发布构建应在完整测试通过后进行。普通用户安装正式插件 ZIP 后不需要再次构建。

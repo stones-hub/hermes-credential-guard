@@ -37,7 +37,7 @@ def _base_env(tmp: Path) -> dict[str, str]:
     env.update(
         {
             "PROFILE": "default",
-            "PLUGIN_ZIP": str(ROOT / "dist/credential-guard-0.4.2-hermes-plugin.zip"),
+            "PLUGIN_ZIP": str(ROOT / "dist/credential-guard-0.4.3-hermes-plugin.zip"),
             "CONFIG_PATH": str(tmp / "profile/config.yaml"),
             "PROFILE_ROOT": str(tmp / "profile"),
             "PLUGIN_DIR": str(tmp / "profile/plugins/credential-guard"),
@@ -136,7 +136,7 @@ def test_hash_block_rejects_wrong_zip_before_success_marker():
         env = _base_env(tmp)
         # Preserve the README assignments while replacing only the example path.
         block = block.replace(
-            'PLUGIN_ZIP="/path/to/credential-guard-0.4.2-hermes-plugin.zip"',
+            'PLUGIN_ZIP="/path/to/credential-guard-0.4.3-hermes-plugin.zip"',
             f'PLUGIN_ZIP="{wrong}"',
         )
         result = _run(block, env)
@@ -149,9 +149,9 @@ def test_hash_block_accepts_designated_zip():
     block = _block_with("EXPECTED_SHA256=")
     with tempfile.TemporaryDirectory() as raw:
         tmp = Path(raw)
-        release = ROOT / "dist/credential-guard-0.4.2-hermes-plugin.zip"
+        release = ROOT / "dist/credential-guard-0.4.3-hermes-plugin.zip"
         block = block.replace(
-            'PLUGIN_ZIP="/path/to/credential-guard-0.4.2-hermes-plugin.zip"',
+            'PLUGIN_ZIP="/path/to/credential-guard-0.4.3-hermes-plugin.zip"',
             f'PLUGIN_ZIP="{release}"',
         )
         result = _run(block, _base_env(tmp))
@@ -177,14 +177,14 @@ def test_fresh_install_block_installs_exact_plugin_root():
         tmp = Path(raw)
         stage_plugin = tmp / "stage/credential-guard"
         stage_plugin.mkdir(parents=True)
-        (stage_plugin / "plugin.yaml").write_text("version: 0.4.2\n", encoding="utf-8")
+        (stage_plugin / "plugin.yaml").write_text("version: 0.4.3\n", encoding="utf-8")
         (stage_plugin / "__init__.py").write_text("", encoding="utf-8")
         env = _base_env(tmp)
         result = _run(block, env)
         assert result.returncode == 0, result.stderr
         assert "PLUGIN_INSTALL_OK" in result.stdout
         plugin = tmp / "profile/plugins/credential-guard"
-        assert (plugin / "plugin.yaml").read_text(encoding="utf-8") == "version: 0.4.2\n"
+        assert (plugin / "plugin.yaml").read_text(encoding="utf-8") == "version: 0.4.3\n"
         assert not (plugin / "credential-guard").exists()
 
 
@@ -194,12 +194,12 @@ def test_upgrade_block_stops_when_backup_move_fails():
         tmp = Path(raw)
         stage_plugin = tmp / "stage/credential-guard"
         stage_plugin.mkdir(parents=True)
-        (stage_plugin / "plugin.yaml").write_text("version: 0.4.2\n", encoding="utf-8")
+        (stage_plugin / "plugin.yaml").write_text("version: 0.4.3\n", encoding="utf-8")
         (stage_plugin / "__init__.py").write_text("", encoding="utf-8")
 
         old_plugin = tmp / "profile/plugins/credential-guard"
         old_plugin.mkdir(parents=True)
-        (old_plugin / "plugin.yaml").write_text("version: 0.4.1\n", encoding="utf-8")
+        (old_plugin / "plugin.yaml").write_text("version: 0.4.2\n", encoding="utf-8")
 
         fake_bin = tmp / "bin"
         fake_bin.mkdir()
@@ -215,7 +215,7 @@ def test_upgrade_block_stops_when_backup_move_fails():
         result = _run(block, env)
         assert result.returncode == 23
         assert "PLUGIN_UPGRADE_OK" not in result.stdout
-        assert (old_plugin / "plugin.yaml").read_text(encoding="utf-8") == "version: 0.4.1\n"
+        assert (old_plugin / "plugin.yaml").read_text(encoding="utf-8") == "version: 0.4.2\n"
         assert not (old_plugin / "credential-guard").exists()
 
 
@@ -225,12 +225,12 @@ def test_upgrade_block_replaces_root_without_nested_plugin():
         tmp = Path(raw)
         stage_plugin = tmp / "stage/credential-guard"
         stage_plugin.mkdir(parents=True)
-        (stage_plugin / "plugin.yaml").write_text("version: 0.4.2\n", encoding="utf-8")
+        (stage_plugin / "plugin.yaml").write_text("version: 0.4.3\n", encoding="utf-8")
         (stage_plugin / "__init__.py").write_text("", encoding="utf-8")
 
         old_plugin = tmp / "profile/plugins/credential-guard"
         old_plugin.mkdir(parents=True)
-        (old_plugin / "plugin.yaml").write_text("version: 0.4.1\n", encoding="utf-8")
+        (old_plugin / "plugin.yaml").write_text("version: 0.4.2\n", encoding="utf-8")
 
         fake_bin = tmp / "bin"
         fake_bin.mkdir()
@@ -243,8 +243,8 @@ def test_upgrade_block_replaces_root_without_nested_plugin():
         result = _run(block, env)
         assert result.returncode == 0, result.stderr
         assert "PLUGIN_UPGRADE_OK" in result.stdout
-        assert (old_plugin / "plugin.yaml").read_text(encoding="utf-8") == "version: 0.4.2\n"
+        assert (old_plugin / "plugin.yaml").read_text(encoding="utf-8") == "version: 0.4.3\n"
         assert not (old_plugin / "credential-guard").exists()
         backups = list((tmp / "profile/plugins").glob("credential-guard.backup-*"))
         assert len(backups) == 1
-        assert (backups[0] / "plugin.yaml").read_text(encoding="utf-8") == "version: 0.4.1\n"
+        assert (backups[0] / "plugin.yaml").read_text(encoding="utf-8") == "version: 0.4.2\n"

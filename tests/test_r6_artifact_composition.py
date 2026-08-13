@@ -83,7 +83,7 @@ def test_landed_current_artifacts_exist_and_match_versioned_manifest():
     )
 
 
-def test_dist_has_current_release_files_only():
+def test_dist_has_current_release_files_and_retained_042():
     names = sorted(p.name for p in DIST.iterdir() if p.is_file())
     expected = sorted(
         {
@@ -91,10 +91,15 @@ def test_dist_has_current_release_files_only():
             SDIST_FILENAME,
             PLUGIN_ZIP_FILENAME,
             ARTIFACT_MANIFEST_FILENAME,
+            "artifact-manifest-0.4.2.json",
+            "credential-guard-0.4.2-hermes-plugin.zip",
+            "hermes_credential_guard-0.4.2-py3-none-any.whl",
+            "hermes_credential_guard-0.4.2.tar.gz",
         }
     )
     assert names == expected
-    assert len(expected) == 4
+    assert len(expected) == 8
+    assert WHEEL_FILENAME.endswith("-0.4.3-py3-none-any.whl")
 
 
 def test_plugin_zip_composition_clean_and_complete():

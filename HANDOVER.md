@@ -1,22 +1,20 @@
 # HANDOVER
 
-## 当前状态（2026-08-12）
+## 当前状态（2026-08-13）
 
-**R8 / 0.4.2：技术签收与发布收口均 PASS（HTTP+HTTPS 统一凭证请求）** — `http_credential_request` 单一
-binding 的 `target.scheme` 精确接受小写 `http`/`https`；共用禁代理、禁重定向、timeout、
-响应上限与统一结果守卫；HTTP 审批固定明文传输警告；HTTPS TLS 校验保留；无第二套执行器、
-无 CIDR/`network_policy`。方案：`docs/R8-0.4.2-HTTP与HTTPS统一凭证请求方案.md`；
-designated 报告：`docs/R8-0.4.2-验收报告.md`。当前活动 `dist/` 只保留 0.4.2 四制品，候选身份
-`97280c65…b43c`；`main` 已提交并推送到 `origin/main`。本轮已为 README 本地 ZIP 安装补上自动
-SHA-256 校验、解压/安装/升级失败关闭与安装后根目录/版本检查，并以错误 ZIP、`mv` 失败及正常
-升级行为门禁实测 13 passed（已覆盖在线安装、启用和更新失败关闭）；当前快照全量非构建 1718 passed / 3 xfailed / 0 failed，ZIP E2E
-2 passed，在线安装当前远程 `main` 也已在临时 Hermes Home 中重验为 0.4.2 且工具集 enabled；
-compileall 与 `git diff --check` 通过。发布收口安全/安装复审与规格/证据/稳定身份复审均明确
-PASS。随后捕获的 1 次 `concurrent_no_cross=False` 已由 200 次压力测试稳定复现 5 次，根因是
-R0 测试 Harness 在两个线程中嵌套 process-global `unittest.mock.patch`；生产 `credential_guard`
-未参与。现已改为父线程单一 patch scope，并断言两个并发调用均返回成功；修复后累计 900 次压力
-复验零失败，专项 248 passed、全量 1718 passed / 3 xfailed / 0 failed，最终增量独立只读终审
-明确 PASS。打 Tag 前又为 README 增加 0.4.2 最全面完整配置：两种 credential、三种 binding、HTTP/HTTPS、Bearer/Basic/API Key Header、stdin raw/line 及全部资源限制字段均由生产 Schema 可执行门禁验证；对应专项 233 passed、全量更新为 1722 passed / 3 xfailed / 0 failed、ZIP E2E 2 passed。未操作真实 default/worker；本轮 README 增量尚未 commit/push。
+**R9 / 0.4.3：源码与制品发布候选（本地收口完成，尚未 Tag/Release）** — 长 Session 连续性
+（累计大请求、整字段边界未知、动态键碰撞、residual/scanner recovery、当前最后 user 语义）
+已收成 0.4.3；并窄修协议字段 whole-field fallback：`model`/`role`/`name`/`tool_call_id`
+边界未知编码私钥 → Provider=0，不得整字段占位后继续。方案：
+`docs/R9-0.4.3-长Session连续性修复方案.md`；designated 报告：`docs/R9-0.4.3-验收报告.md`；
+Release notes：`docs/R9-0.4.3-Release-Notes.md`。活动 `dist/` = 历史 0.4.2 四制品（零漂移）
++ 新 0.4.3 四制品；候选身份 `0882b64c…7e4d`；plugin ZIP
+`738bc8ae4e1973a50efba604602a9fb3c7a6739efb95e48024b6a1975e97dacb`。双临时构建逐字节一致后
+`copy2` 落地；最终 ZIP 隔离安装 E2E 3 passed（真实 PluginManager）。**未 commit/push/Tag/
+GitHub Release；未操作正式 worker。**
+
+**R8 / 0.4.2：技术签收与发布收口均 PASS（HTTP+HTTPS 统一凭证请求）** — 方案/验收见
+`docs/R8-0.4.2-*`；历史四制品保留且哈希不变。
 
 **R7：PASS（行政签收）** — 两个插件兼容性 Bug 已关闭，并获两路独立只读复审局部 PASS：
 （1）超长普通文本内嵌完全 Unicode-escape 合成 PEM 由有界 JSON-escape 子候选检出，
@@ -33,7 +31,8 @@ session_search 等）属于 Hermes 当前插件接口不覆盖的宿主能力边
 本里程碑的 R8 仅指 HTTP/HTTPS 统一凭证请求，与该否决项无关。
 方案：`docs/R7-Hermes当前版本真实外发兼容性修复方案.md`。
 
-**0.4.1 属于已签收的历史发布候选**：见 `docs/R7-0.4.1-验收报告.md`。当前活动版本与发布目录统一为 0.4.2。
+**0.4.1 / 0.4.2 属于已签收的历史发布**：见 `docs/R7-0.4.1-验收报告.md`、
+`docs/R8-0.4.2-验收报告.md`。当前产品版本为 **0.4.3 发布候选**；`dist/` 同时保留 0.4.2 与 0.4.3。
 
 Credential Guard 已完成从 0.3.1 固定 MySQL/SSH 动作架构到“外发脱敏 + 审批后通用本地注入 + 结果脱敏”配置化凭证边界的重构。
 

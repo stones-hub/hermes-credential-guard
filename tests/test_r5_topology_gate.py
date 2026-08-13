@@ -97,8 +97,8 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         ".r6-slice3-artifact-audit-task.md",
         "tests/support/artifact_composition_audit.py",
         "tests/test_r6_artifact_composition.py",
-        # Current release distribution policy: the active tree ships only 0.4.2.
-        # Historical release reports and freeze sidecars remain, but old binaries do not.
+        # Current release distribution policy: active 0.4.3 plus retained 0.4.2.
+        # Historical release reports and freeze sidecars remain.
         "tests/test_current_dist_policy.py",
         # 0.4.2 release-close README fail-closed structure and behavior gates.
         "tests/test_readme_install_fail_closed.py",
@@ -210,6 +210,22 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         ".cg-scanner-error-session-recovery-round2-task.md",
         ".cg-scanner-error-session-recovery-round3-task.md",
         "tests/test_scanner_error_session_recovery.py",
+        # R9 / 0.4.3 release closeout: protocol-field whole-field fallback narrow,
+        # designated report, Release Notes, final-ZIP E2E, retained 0.4.2 + new 0.4.3.
+        ".cg-043-release-closeout-task.md",
+        ".cg-043-source-fallback-round2-task.md",
+        "docs/R9-0.4.3-长Session连续性修复方案.md",
+        "docs/R9-0.4.3-验收报告.md",
+        "docs/R9-0.4.3-Release-Notes.md",
+        "tests/test_protocol_field_whole_field_fallback.py",
+        "tests/r9_043_final_zip_e2e.py",
+        "tests/test_r9_043_final_zip_optin_gate.py",
+        "scripts/run_r9_043_final_zip_e2e.py",
+        "scripts/run_r9_043_final_zip_tests.py",
+        "dist/artifact-manifest-0.4.3.json",
+        "dist/credential-guard-0.4.3-hermes-plugin.zip",
+        "dist/hermes_credential_guard-0.4.3-py3-none-any.whl",
+        "dist/hermes_credential_guard-0.4.3.tar.gz",
     }
 )
 
@@ -319,6 +335,8 @@ R5_MODIFIED_PATHS: FrozenSet[str] = frozenset(
         "tests/test_target_catalog_boundary.py",
         "CLAUDE.md",
         "HANDOVER.md",
+        # R9 / 0.4.3 release-close: historical plan banner updated to current candidate.
+        "docs/plan.md",
         # R7 production + E2E/canary contract updates (content drifted from baseline).
         "credential_guard/middleware.py",
         "scripts/run_canary_e2e.py",

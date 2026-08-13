@@ -405,14 +405,48 @@ def _path_segment(key: Any) -> Any:
     return "<key>"
 
 
+def _is_approved_whole_field_fallback_path(path: tuple) -> bool:
+    """Closed allowlist: boundary-unknown encoded keys may whole-field replace.
+
+    Distinct from ``_is_approved_scanner_recovery_path``: current-user
+    ``content`` is allowed here (provider-bound copy only), and protocol /
+    skeleton fields (``model``, ``role``, ``name``, ``tool_call_id``, …) are
+    never eligible. Do not invert the residual core blacklist or reuse the
+    scanner-recovery allowlist — that would incorrectly relax current input.
+    """
+    if not path:
+        return False
+    # messages[i].content
+    if (
+        len(path) == 3
+        and path[0] == "messages"
+        and isinstance(path[1], int)
+        and path[2] == "content"
+    ):
+        return True
+    # messages[i].tool_calls[j].function.arguments
+    if (
+        len(path) == 6
+        and path[0] == "messages"
+        and isinstance(path[1], int)
+        and path[2] == "tool_calls"
+        and isinstance(path[3], int)
+        and path[4] == "function"
+        and path[5] == "arguments"
+    ):
+        return True
+    return False
+
+
 def _redact_locatable_private_keys(payload: Any) -> Any:
     """Build a fresh provider-bound copy with fully locatable raw PEM replaced.
 
     Does not mutate ``payload``. Ordinary string values whose private-key
     material cannot be fully localized are replaced wholesale with
-    ``REDACTED_UNRESOLVED_SENSITIVE_FIELD``. Dict keys with the same failure
-    fail closed (structure cannot be safely whole-key replaced). Scanner
-    errors still raise ``RequestBlock``.
+    ``REDACTED_UNRESOLVED_SENSITIVE_FIELD`` only on approved content-class
+    paths. Protocol / skeleton fields fail closed. Dict keys with the same
+    failure fail closed (structure cannot be safely whole-key replaced).
+    Scanner errors still raise ``RequestBlock``.
     """
 
     root = payload
@@ -438,6 +472,8 @@ def _redact_locatable_private_keys(payload: Any) -> Any:
                     if is_dict_key:
                         # Whole-key replace risks silent overwrite / collision.
                         raise RequestBlock(_detail_collision(loc)) from None
+                    if not _is_approved_whole_field_fallback_path(str_path):
+                        raise RequestBlock(_detail_residual(loc)) from None
                     return REDACTED_UNRESOLVED_SENSITIVE_FIELD
                 raise RequestBlock(_detail_scanner_error(loc)) from None
             except Exception:

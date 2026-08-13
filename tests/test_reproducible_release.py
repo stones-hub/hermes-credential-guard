@@ -507,6 +507,7 @@ _DESIGNATED_REPORTS = {
     "0.4.0": "docs/R6-0.4.0-验收报告.md",
     "0.4.1": "docs/R7-0.4.1-验收报告.md",
     "0.4.2": "docs/R8-0.4.2-验收报告.md",
+    "0.4.3": "docs/R9-0.4.3-验收报告.md",
 }
 
 def _designated_report_for_version(version: str) -> Path:
