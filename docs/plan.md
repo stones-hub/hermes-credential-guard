@@ -1,6 +1,6 @@
 # Credential Guard 总控计划
 
-> ⚠️ **历史总控计划，当前产品路线已更新。** 本文保留 M0–M3.1 的历史决策与验收记录；2026-07-31 起的通用凭证边界重构，以 `docs/Credential-Guard-通用凭证边界重构方案.md` 和 `docs/Credential-Guard-通用凭证边界实施计划.md` 为唯一现行路线。当前状态（2026-08-13）：R0–R8 已签收；**0.4.3 源码/制品发布候选**（长 Session 连续性 + 协议字段窄修，见 `docs/R9-0.4.3-*`）；尚未 Tag/Release；正式 worker 未由 Agent 升级。
+> ⚠️ **历史总控计划，当前产品路线已更新。** 本文保留 M0–M3.1 的历史决策与验收记录；2026-07-31 起的通用凭证边界重构，以 `docs/Credential-Guard-通用凭证边界重构方案.md` 和 `docs/Credential-Guard-通用凭证边界实施计划.md` 为唯一现行路线。当前状态（2026-08-14）：R0–R9 已签收（0.4.3 已 Tag/Release）；**0.4.4 技术候选 PASS**（协议字段已登记凭证 fail-closed + manifest size 严格绑定 + 最终 ZIP + 两路独立终审，见 `docs/R10-0.4.4-*`）；0.4.4 尚未 commit/push/Tag/Release；正式 worker 未由 Agent 升级。
 
 ## 目标
 

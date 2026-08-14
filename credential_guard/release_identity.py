@@ -44,7 +44,7 @@ _SKIP_DIR_NAMES = {
 
 # Must match scripts/build_release_artifacts.py (kept here to avoid importing
 # the builder into the runtime plugin path).
-PLUGIN_VERSION = "0.4.3"
+PLUGIN_VERSION = "0.4.4"
 EXPECTED_SOURCE_DATE_EPOCH = 1704067200
 EXPECTED_PYTHONHASHSEED = "0"
 EXPECTED_TZ = "UTC"
@@ -79,8 +79,15 @@ _ALLOWED_BUILD_KEYS = frozenset(
         "tz",
     }
 )
-_ALLOWED_ARTIFACT_ENTRY_KEYS = frozenset({"filename", "sha256"})
+_ALLOWED_ARTIFACT_ENTRY_KEYS = frozenset({"filename", "sha256", "size"})
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _require_non_negative_int(value: Any, *, label: str) -> int:
+    # bool is a subclass of int — reject explicitly so True/False cannot pass.
+    if type(value) is not int or value < 0:
+        raise ValueError(f"{label} must be a non-negative int, got {value!r}")
+    return value
 
 
 def _require_exact_keys(obj: Dict[str, Any], allowed: frozenset, *, label: str) -> None:
@@ -307,6 +314,9 @@ def verify_artifact_manifest(
         expected = _require_sha256_hex(
             entry.get("sha256"), label=f"artifact-manifest.{kind}.sha256"
         )
+        expected_size = _require_non_negative_int(
+            entry.get("size"), label=f"artifact-manifest.{kind}.size"
+        )
         path = dist / filename
         # Resolve only via basename under dist/ — never follow manifest paths.
         if path.resolve().parent != dist.resolve():
@@ -318,6 +328,12 @@ def verify_artifact_manifest(
             raise ValueError(
                 f"artifact hash drift for {filename}: "
                 f"manifest={expected} actual={actual}"
+            )
+        actual_size = path.stat().st_size
+        if actual_size != expected_size:
+            raise ValueError(
+                f"artifact size drift for {filename}: "
+                f"manifest={expected_size} actual={actual_size}"
             )
 
     if len(set(seen_names)) != 3:

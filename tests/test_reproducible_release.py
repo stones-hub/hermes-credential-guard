@@ -92,7 +92,11 @@ def _fresh_verify_fixture(tmp_path):
     for kind, filename in artifacts.items():
         path = dist / filename
         path.write_bytes(f"synthetic-{kind}-fixture".encode("utf-8"))
-        entries[kind] = {"filename": filename, "sha256": _sha(path)}
+        entries[kind] = {
+            "filename": filename,
+            "sha256": _sha(path),
+            "size": path.stat().st_size,
+        }
 
     measured = {
         "candidate_manifest_sha256": "a" * 64,
@@ -169,7 +173,7 @@ _BUILD_REQUIRED_KEYS = (
     "tz",
 )
 _ARTIFACT_KINDS = ("wheel", "sdist", "plugin_zip")
-_ARTIFACT_ENTRY_KEYS = ("filename", "sha256")
+_ARTIFACT_ENTRY_KEYS = ("filename", "sha256", "size")
 
 
 @pytest.mark.parametrize("missing_key", _TOP_REQUIRED_KEYS)
@@ -327,6 +331,11 @@ def test_l2_artifact_entry_extra_key_red(tmp_path, kind):
         ("sha256", 1, r"must be 64-char lowercase hex"),
         ("sha256", True, r"must be 64-char lowercase hex"),
         ("sha256", ["0" * 64], r"must be 64-char lowercase hex"),
+        ("size", True, r"size must be a non-negative int"),
+        ("size", "1", r"size must be a non-negative int"),
+        ("size", 1.0, r"size must be a non-negative int"),
+        ("size", None, r"size must be a non-negative int"),
+        ("size", -1, r"size must be a non-negative int"),
     ],
 )
 def test_l2_artifact_entry_wrong_type_red(
@@ -338,6 +347,39 @@ def test_l2_artifact_entry_wrong_type_red(
     _write_manifest(dist, payload)
     with pytest.raises(ValueError, match=match):
         verify_artifact_manifest(fake_root, measured=measured)
+
+
+@pytest.mark.parametrize("kind", _ARTIFACT_KINDS)
+def test_l2_artifact_size_manifest_plus_one_is_red(tmp_path, kind):
+    """Manifest size +1 with disk unchanged must fail as size drift."""
+    fake_root, dist, man, measured = _fresh_verify_fixture(tmp_path)
+    payload = copy.deepcopy(man)
+    payload[kind]["size"] = payload[kind]["size"] + 1
+    _write_manifest(dist, payload)
+    with pytest.raises(ValueError, match=r"artifact size drift"):
+        verify_artifact_manifest(fake_root, measured=measured)
+
+
+@pytest.mark.parametrize("kind", _ARTIFACT_KINDS)
+def test_l2_artifact_size_gate_independent_of_hash(tmp_path, kind):
+    """Disk size changes while hash field tracks new bytes: size gate alone must RED.
+
+    Proves the failure is not stolen by the hash gate — sha256 stays consistent
+    with the mutated file; only size (still the pre-mutation value) drifts.
+    """
+    fake_root, dist, man, measured = _fresh_verify_fixture(tmp_path)
+    filename = man[kind]["filename"]
+    path = dist / filename
+    path.write_bytes(path.read_bytes() + b"SIZE-GATE-PAD")
+    payload = copy.deepcopy(man)
+    payload[kind]["sha256"] = _sha(path)
+    # Keep payload[kind]["size"] at the original (smaller) value.
+    assert payload[kind]["size"] != path.stat().st_size
+    _write_manifest(dist, payload)
+    with pytest.raises(ValueError, match=r"artifact size drift"):
+        verify_artifact_manifest(fake_root, measured=measured)
+    # Hash would verify if size were ignored — confirm sha256 matches disk.
+    assert payload[kind]["sha256"] == _sha(path)
 
 
 @pytest.mark.parametrize(
@@ -508,7 +550,12 @@ _DESIGNATED_REPORTS = {
     "0.4.1": "docs/R7-0.4.1-验收报告.md",
     "0.4.2": "docs/R8-0.4.2-验收报告.md",
     "0.4.3": "docs/R9-0.4.3-验收报告.md",
+    "0.4.4": "docs/R10-0.4.4-验收报告.md",
 }
+
+# Strict stage: True after dual-build copy2 lands 0.4.4 artifacts + hashes.
+ARTIFACTS_LANDED_FOR_CURRENT = True
+STRICT_PENDING = True
 
 def _designated_report_for_version(version: str) -> Path:
     rel = _DESIGNATED_REPORTS.get(version)
@@ -533,11 +580,34 @@ def test_k2_docs_final_plugin_zip_hash_matches_manifest_when_present():
     """Current PLUGIN_VERSION designated report hash must match dist manifest.
 
     Historical M2 0.2.0 hashes must not be compared against a newer manifest.
+    Source-candidate pending-build phase uses a strict no-hash contract.
     """
+    assert STRICT_PENDING is True
     report = _designated_report_for_version(PLUGIN_VERSION)
     if not report.is_file():
         pytest.fail(f"designated report missing for {PLUGIN_VERSION}: {report}")
     text = report.read_text(encoding="utf-8")
+    if not ARTIFACTS_LANDED_FOR_CURRENT:
+        assert "源码候选" in text
+        assert "待主代理构建" in text
+        assert _parse_plugin_zip_hash_for_version(text, PLUGIN_VERSION) is None, (
+            "pending 0.4.4 report must not invent plugin zip hashes"
+        )
+        manifest_path = artifact_manifest_path(ROOT)
+        assert not manifest_path.is_file(), (
+            f"R10_044_ARTIFACTS_PENDING_BUILD: unexpected {ARTIFACT_MANIFEST_FILENAME}"
+        )
+        # Historical 0.4.3 designated report remains hash-bound.
+        hist = _designated_report_for_version("0.4.3")
+        hist_parsed = _parse_plugin_zip_hash_for_version(
+            hist.read_text(encoding="utf-8"), "0.4.3"
+        )
+        assert hist_parsed is not None
+        assert hist_parsed[1] == (
+            "738bc8ae4e1973a50efba604602a9fb3c7a6739efb95e48024b6a1975e97dacb"
+        )
+        return
+
     if re.search(r"^\*\*BLOCKING", text, re.M):
         pytest.fail(
             f"designated report for {PLUGIN_VERSION} is still BLOCKING; "
@@ -600,6 +670,21 @@ def test_k2_wrong_current_report_hash_must_fail(monkeypatch, tmp_path):
     assert PLUGIN_VERSION in _DESIGNATED_REPORTS, (
         f"no designated report mapping for {PLUGIN_VERSION}"
     )
+    if not ARTIFACTS_LANDED_FOR_CURRENT:
+        # Pending phase: inventing a current-version hash must not bind a
+        # non-existent 0.4.4 manifest; historical 0.4.3 still drifts correctly.
+        fake_hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        text = (
+            "| plugin zip | `credential-guard-0.4.3-hermes-plugin.zip` "
+            f"| `{fake_hash}` |\n"
+        )
+        parsed = _parse_plugin_zip_hash_for_version(text, "0.4.3")
+        assert parsed is not None
+        man_043 = ROOT / "dist" / "artifact-manifest-0.4.3.json"
+        assert man_043.is_file()
+        man = json.loads(man_043.read_text(encoding="utf-8"))
+        assert parsed[1] != man["plugin_zip"]["sha256"]
+        return
     # Simulate wrong hash in an isolated copy of the selection logic.
     fake_hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     text = (

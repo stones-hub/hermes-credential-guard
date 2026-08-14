@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN_VERSION = "0.4.3"
+PLUGIN_VERSION = "0.4.4"
 WHEEL_NAME = f"hermes_credential_guard-{PLUGIN_VERSION}-py3-none-any.whl"
 SDIST_NAME = f"hermes_credential_guard-{PLUGIN_VERSION}.tar.gz"
 PLUGIN_ZIP_NAME = f"credential-guard-{PLUGIN_VERSION}-hermes-plugin.zip"
@@ -521,14 +521,17 @@ def write_artifact_manifest(out_dir: Path, built: Dict[str, Any]) -> Path:
         "wheel": {
             "filename": Path(built["wheel"]).name,
             "sha256": built["wheel_sha256"],
+            "size": Path(built["wheel"]).stat().st_size,
         },
         "sdist": {
             "filename": Path(built["sdist"]).name,
             "sha256": built["sdist_sha256"],
+            "size": Path(built["sdist"]).stat().st_size,
         },
         "plugin_zip": {
             "filename": Path(built["plugin_zip"]).name,
             "sha256": built["plugin_zip_sha256"],
+            "size": Path(built["plugin_zip"]).stat().st_size,
         },
         "build": {
             "source_date_epoch": epoch,

@@ -48,10 +48,14 @@ Hermes auxiliary_client.call_llm（title/compression/vision/oneshot/session_sear
 0.4.1 发布候选见 docs/R7-0.4.1-验收报告.md。
 R8 / 0.4.2：PASS（HTTP 与 HTTPS 统一凭证请求）—— 方案/验收见 docs/R8-0.4.2-*；
 历史四制品保留于 dist/ 且零漂移。
-R9 / 0.4.3：源码/制品发布候选——长 Session 连续性收口 + 协议字段 whole-field
-fallback 窄修；方案 docs/R9-0.4.3-长Session连续性修复方案.md；
+R9 / 0.4.3：PASS（已 commit/push/tag/GitHub Release）——长 Session 连续性收口 +
+协议字段 whole-field fallback 窄修；方案 docs/R9-0.4.3-长Session连续性修复方案.md；
 验收 docs/R9-0.4.3-验收报告.md；Release notes docs/R9-0.4.3-Release-Notes.md。
-尚未 Tag/GitHub Release；未操作正式 worker。
+R10 / 0.4.4：技术候选 PASS（manifest size 严格绑定、最终 ZIP 与两路独立只读终审均通过）——协议字段
+value 命中已登记凭证变体 fail-closed；方案 docs/R10-0.4.4-协议字段已登记凭证失败关闭修复方案.md；
+验收 docs/R10-0.4.4-验收报告.md；Release notes docs/R10-0.4.4-Release-Notes.md。
+artifact-manifest 三 entry 现绑定 filename/sha256/size；0.4.4 四制品已双构建 copy2 落地；
+主代理全量 1960 passed / 3 xfailed / 0 failed，两路终审均 PASS；尚未 commit/push/Tag/GitHub Release；未操作正式 worker。
 ```
 
 R5 关键事实：删除 50 个批准文件（7 个生产模块 + 整个 vendored PyMySQL + 17 个旧测试脚本），

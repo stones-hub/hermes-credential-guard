@@ -1,17 +1,21 @@
 # HANDOVER
 
-## 当前状态（2026-08-13）
+## 当前状态（2026-08-14）
 
-**R9 / 0.4.3：源码与制品发布候选（本地收口完成，尚未 Tag/Release）** — 长 Session 连续性
-（累计大请求、整字段边界未知、动态键碰撞、residual/scanner recovery、当前最后 user 语义）
-已收成 0.4.3；并窄修协议字段 whole-field fallback：`model`/`role`/`name`/`tool_call_id`
-边界未知编码私钥 → Provider=0，不得整字段占位后继续。方案：
-`docs/R9-0.4.3-长Session连续性修复方案.md`；designated 报告：`docs/R9-0.4.3-验收报告.md`；
-Release notes：`docs/R9-0.4.3-Release-Notes.md`。活动 `dist/` = 历史 0.4.2 四制品（零漂移）
-+ 新 0.4.3 四制品；候选身份 `0882b64c…7e4d`；plugin ZIP
-`738bc8ae4e1973a50efba604602a9fb3c7a6739efb95e48024b6a1975e97dacb`。双临时构建逐字节一致后
-`copy2` 落地；最终 ZIP 隔离安装 E2E 3 passed（真实 PluginManager）。**未 commit/push/Tag/
-GitHub Release；未操作正式 worker。**
+**R10 / 0.4.4：技术候选 PASS（manifest size 严格绑定、最终 ZIP 与两路独立只读终审均通过）** — 协议骨架字段 value 命中已登记凭证变体
+必须本机 fail-closed（`LocalBlockRequest`，Provider=0）；content/arguments 仍替换逻辑
+token 后继续。方案：`docs/R10-0.4.4-协议字段已登记凭证失败关闭修复方案.md`；designated
+报告：`docs/R10-0.4.4-验收报告.md`；Release notes：`docs/R10-0.4.4-Release-Notes.md`。
+发布身份合同已补齐 artifact entry `size`（与磁盘 `st_size` 精确绑定）。活动 `dist/` = 历史 0.4.2 + 已发布 0.4.3 + **已落地 0.4.4 四制品**
+（`ARTIFACTS_LANDED=True` / `STRICT=True`；plugin ZIP
+`d6ee2bf6a92a4ca55ee37f24802cf26316ab38adcbe27b9d59a4ee9e944ae265`，size `112548`）。
+主代理全量 `1960 passed / 3 xfailed / 0 failed`；两路独立终审均明确 **PASS**。
+**本轮未 commit/push/Tag/Release；未操作正式 worker。**
+
+**R9 / 0.4.3：已发布** — 长 Session 连续性 + 协议字段 whole-field fallback 窄修已
+commit/push/tag/GitHub Release（`v0.4.3` / HEAD 起点
+`ed91c98057bf010ff5a3d3b84ee8bb97c7c5ed9d`）。历史报告见 `docs/R9-0.4.3-*`；
+plugin ZIP `738bc8ae4e1973a50efba604602a9fb3c7a6739efb95e48024b6a1975e97dacb`。
 
 **R8 / 0.4.2：技术签收与发布收口均 PASS（HTTP+HTTPS 统一凭证请求）** — 方案/验收见
 `docs/R8-0.4.2-*`；历史四制品保留且哈希不变。
@@ -32,7 +36,7 @@ session_search 等）属于 Hermes 当前插件接口不覆盖的宿主能力边
 方案：`docs/R7-Hermes当前版本真实外发兼容性修复方案.md`。
 
 **0.4.1 / 0.4.2 属于已签收的历史发布**：见 `docs/R7-0.4.1-验收报告.md`、
-`docs/R8-0.4.2-验收报告.md`。当前产品版本为 **0.4.3 发布候选**；`dist/` 同时保留 0.4.2 与 0.4.3。
+`docs/R8-0.4.2-验收报告.md`。当前产品版本为 **0.4.4 技术候选 PASS**；`dist/` 保留 0.4.2 与已发布 0.4.3，并新增已通过最终 ZIP 验收和两路独立终审的 0.4.4 四制品。
 
 Credential Guard 已完成从 0.3.1 固定 MySQL/SSH 动作架构到“外发脱敏 + 审批后通用本地注入 + 结果脱敏”配置化凭证边界的重构。
 

@@ -809,6 +809,18 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         "tests/test_r9_043_final_zip_optin_gate.py",
         "scripts/run_r9_043_final_zip_e2e.py",
         "scripts/run_r9_043_final_zip_tests.py",
+        # R10 / 0.4.4 artifacts landed (non-dist; dist/ skipped by enumerator).
+        ".cg-044-protocol-fields-fix-task.md",
+        ".cg-044-artifacts-land-task.md",
+        ".cg-044-manifest-size-fix-task.md",
+        "docs/R10-0.4.4-协议字段已登记凭证失败关闭修复方案.md",
+        "docs/R10-0.4.4-验收报告.md",
+        "docs/R10-0.4.4-Release-Notes.md",
+        "tests/test_protocol_field_registered_secret.py",
+        "tests/r10_044_final_zip_e2e.py",
+        "tests/test_r10_044_final_zip_optin_gate.py",
+        "scripts/run_r10_044_final_zip_e2e.py",
+        "scripts/run_r10_044_final_zip_tests.py",
         # scripts/run_final_zip_encoding_canary.py is baseline-era (modified only);
         # it stays out of this delta and is declared in R5_MODIFIED_PATHS.
     }

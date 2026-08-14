@@ -438,6 +438,61 @@ def _is_approved_whole_field_fallback_path(path: tuple) -> bool:
     return False
 
 
+def _is_protocol_field_value_path(path: tuple) -> bool:
+    """Closed allowlist: protocol skeleton *values* (not content-class fields).
+
+    Distinct from ``_is_approved_whole_field_fallback_path`` (PEM whole-field
+    replace) and from dict-key collision protection in ``redact_payload``.
+    Only these value paths fail closed when they contain a registered variant.
+    """
+    if len(path) == 1 and path[0] == "model":
+        return True
+    if (
+        len(path) == 3
+        and path[0] == "messages"
+        and isinstance(path[1], int)
+        and path[2] in {"role", "name", "tool_call_id"}
+    ):
+        return True
+    return False
+
+
+def _reject_registered_secret_in_protocol_fields(
+    payload: Any, registry: Any, root: Any
+) -> None:
+    """Fail closed before token replace when a protocol value hits a variant.
+
+    Must run before ``redact_payload``: after replace the value is a logical
+    token and residual plain-secret scans would miss the original hit.
+    """
+    try:
+        pairs = collect_protected_replacements(registry)
+    except Exception:
+        raise RequestBlock(_detail_scanner_error("request")) from None
+    if not pairs:
+        return
+
+    def text_hits(text: str) -> bool:
+        return any(variant and variant in text for variant, _token in pairs)
+
+    def walk(node: Any, path: tuple) -> None:
+        if isinstance(node, str):
+            if _is_protocol_field_value_path(path) and text_hits(node):
+                loc = humanize_location(root, path)
+                raise RequestBlock(_detail_residual(loc))
+            return
+        if isinstance(node, dict):
+            for ordinal, (key, value) in enumerate(node.items()):
+                walk(value, path + (_machine_path_segment(key, ordinal),))
+            return
+        if isinstance(node, (list, tuple)):
+            for idx, item in enumerate(node):
+                walk(item, path + (idx,))
+            return
+
+    walk(payload, ())
+
+
 def _redact_locatable_private_keys(payload: Any) -> Any:
     """Build a fresh provider-bound copy with fully locatable raw PEM replaced.
 
@@ -1130,6 +1185,9 @@ def _prepare_provider_bound(request: Any) -> Any:
         raise RequestBlock(_config_unavailable_detail()) from None
     except Exception:
         raise RequestBlock(_config_unavailable_detail()) from None
+    # Protocol skeleton values with registered variants must block before
+    # token replace (otherwise residual scans only see opaque tokens).
+    _reject_registered_secret_in_protocol_fields(prepared, registry, request)
     try:
         redacted = redact_payload(prepared, registry)
     except RedactionCollisionError as exc:

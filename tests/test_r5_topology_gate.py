@@ -97,8 +97,8 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         ".r6-slice3-artifact-audit-task.md",
         "tests/support/artifact_composition_audit.py",
         "tests/test_r6_artifact_composition.py",
-        # Current release distribution policy: active 0.4.3 plus retained 0.4.2.
-        # Historical release reports and freeze sidecars remain.
+        # Current release distribution policy: 0.4.4 artifacts landed + retained
+        # 0.4.2/0.4.3. Historical release reports and freeze sidecars remain.
         "tests/test_current_dist_policy.py",
         # 0.4.2 release-close README fail-closed structure and behavior gates.
         "tests/test_readme_install_fail_closed.py",
@@ -226,6 +226,23 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         "dist/credential-guard-0.4.3-hermes-plugin.zip",
         "dist/hermes_credential_guard-0.4.3-py3-none-any.whl",
         "dist/hermes_credential_guard-0.4.3.tar.gz",
+        # R10 / 0.4.4 artifacts landed: protocol-field registered-secret fail-closed
+        # + dual-build copy2 four-file set (history 0.4.2/0.4.3 retained).
+        ".cg-044-protocol-fields-fix-task.md",
+        ".cg-044-artifacts-land-task.md",
+        ".cg-044-manifest-size-fix-task.md",
+        "docs/R10-0.4.4-协议字段已登记凭证失败关闭修复方案.md",
+        "docs/R10-0.4.4-验收报告.md",
+        "docs/R10-0.4.4-Release-Notes.md",
+        "tests/test_protocol_field_registered_secret.py",
+        "tests/r10_044_final_zip_e2e.py",
+        "tests/test_r10_044_final_zip_optin_gate.py",
+        "scripts/run_r10_044_final_zip_e2e.py",
+        "scripts/run_r10_044_final_zip_tests.py",
+        "dist/artifact-manifest-0.4.4.json",
+        "dist/credential-guard-0.4.4-hermes-plugin.zip",
+        "dist/hermes_credential_guard-0.4.4-py3-none-any.whl",
+        "dist/hermes_credential_guard-0.4.4.tar.gz",
     }
 )
 
@@ -335,7 +352,7 @@ R5_MODIFIED_PATHS: FrozenSet[str] = frozenset(
         "tests/test_target_catalog_boundary.py",
         "CLAUDE.md",
         "HANDOVER.md",
-        # R9 / 0.4.3 release-close: historical plan banner updated to current candidate.
+        # R9/R10: historical plan banner tracks current candidate version.
         "docs/plan.md",
         # R7 production + E2E/canary contract updates (content drifted from baseline).
         "credential_guard/middleware.py",
