@@ -1476,9 +1476,9 @@ def test_mutation_variant_fault_misclassified_as_config_reds(monkeypatch):
     )
     real_prepare = mw._prepare_provider_bound
 
-    def prepare_confuse(request):
+    def prepare_confuse(request, session_id=""):
         try:
-            return real_prepare(request)
+            return real_prepare(request, session_id=session_id)
         except mw.RequestBlock as rb:
             if rb.detail.code == "CG-SCANNER-ERROR":
                 raise mw.RequestBlock(mw._config_unavailable_detail()) from None

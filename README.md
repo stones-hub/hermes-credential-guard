@@ -2,7 +2,7 @@
 
 Credential Guard 是一个独立的 Hermes 插件，用于保护本机凭证，并在用户人工批准后让 Hermes 使用凭证执行受限操作，而不把真实凭证交给模型。
 
-当前版本：`0.4.4`（制品候选已落地；可核验安装正式插件 ZIP。尚未 GitHub Release / 未由 Agent 安装正式 worker。）
+当前版本：`0.4.5`（制品已落地：0.4.5 四制品已由真实双构建写入本仓库 `dist/`，哈希见下文「开发与验证」。尚未 GitHub Release、尚未 Tag、未由 Agent 安装正式 worker，因此下文「方式二：本地 ZIP 安装」的可核验下载配方仍指向已发布的 `0.4.4`。）
 
 ```text
 credentials = 要保护的秘密
@@ -11,11 +11,51 @@ bindings    = 允许申请执行的固定能力
 
 只配置 `credentials`、不配置 `bindings` 时，插件仍会保护已登记凭证，但 Hermes 不能使用这些凭证调用接口或运行程序。
 
+## 保护边界（先读这里）
+
+**保护**
+
+- 你在配置文件里**登记过**的凭证 —— 明文、percent 编码、`quote_plus`、Base64、URL-safe Base64、JSON 转义**六种形态**都会被替换为安全代号；
+- PEM 私钥 —— 替换为占位符（编码形态边界不可定时整字段替换）。
+
+**不保护**
+
+- **未登记的凭证 —— 原样发送给模型。** 插件没有通用凭证格式识别能力：把一个没写进配置文件的 API Key、数据库密码或 Token 粘贴到聊天框，它会**原封不动**进入模型上下文。实测 OpenAI `sk-`、GitHub `ghp_`、AWS AKIA 与 Secret Key、Slack `xoxb-`、MySQL 连接串密码、JWT、`password=xxx` 全部放行。
+- 自动标题、上下文压缩、Vision、oneshot、`session_search` 等 auxiliary 模型调用 —— 走的是另一条链路，不经过本插件。
+
+> 常见误解：以为装上插件后粘贴任何凭证都安全。**实际只有配置文件里登记过的那几条是安全的。**
+> 要保护一条凭证，必须先把它写进 `credentials`。
+
+普通内容不受影响：中文文本、订单号、Git SHA、普通 Base64 数据均原样通过。
+
+## 安装后第一步：最小可用配置
+
+首次安装时，如果 `~/.hermes/credential-guard/` 配置目录尚不存在，普通聊天会正常放行，并在本地提示一次“已安装但未配置，凭证保护未启用”。该本地诊断为 best-effort，不影响聊天推进。
+
+如果配置目录已经存在、但其中缺少 `credential-guard.json`，则视为半配置状态并继续保护性阻断；配置失败时的本地诊断同样为 best-effort，不改变阻断语义。配置文件存在但内容、结构、权限或属主不合法时也继续阻断。对可安全定位的 Schema 错误，本地诊断会额外给出字段位置（如 `bindings.my-api.target`），只含逻辑名与固定字段名，绝不回显 host / path / program / 凭证值。
+
+最省事的起步方式是只写 `credentials`、把 `bindings` 留空 —— 此时脱敏保护立即生效，普通聊天不受影响，之后再逐步添加 binding：
+
+```json
+{
+  "version": 2,
+  "credentials": {
+    "my-service-token": {
+      "type": "token",
+      "value": "在这里填你的真实 Token"
+    }
+  },
+  "bindings": {}
+}
+```
+
+配置文件路径与权限要求见下文「配置文件位置」。
+
 ## 主要能力
 
-- 在 Hermes 主聊天模型请求发出前，替换已登记的 Token、密码和受支持的可逆编码形式；
+- 在 Hermes 主聊天模型请求发出前，替换**已登记**的 Token、密码和受支持的可逆编码形式；
 - 在主链工具结果返回模型前再次检查和脱敏；
-- 在本地阻断 PEM 私钥及其受支持的常见编码形式；
+- 将 PEM 私钥及其受支持的常见编码形式替换为占位符（请求仍会发出，私钥本身不进入模型上下文）；
 - 保护当前 Profile 的 Credential Guard Store 和内置 SSH 敏感路径；
 - 经人工审批后，向固定 HTTP 或 HTTPS 目标注入：
   - Bearer Token；
@@ -64,7 +104,7 @@ bindings    = 允许申请执行的固定能力
 - 已安装支持原生插件的 Hermes Agent；
 - macOS 或 Linux；
 - Python 3.9 及以上；
-- 当前 `0.4.4` 无第三方 Python 运行依赖。
+- 当前 `0.4.5` 无第三方 Python 运行依赖。
 
 > Credential Guard 是纯 Python 目录插件。正式插件 ZIP 解压后即可加载，用户不需要运行 `pip install`、`npm build`、`make` 或其他构建命令。
 
@@ -103,13 +143,15 @@ hermes -p "$PROFILE" plugins update credential-guard
 
 ## 方式二：本地 ZIP 安装
 
-本地安装必须使用正式制品。当前可核验 ZIP：
+本地安装必须使用正式制品。0.4.5 的插件 ZIP 已构建并落在本仓库 `dist/`，但尚未 Tag / 尚未 GitHub Release，因此**没有可公开下载的 0.4.5 地址**。下面这份可核验的下载 + 校验配方继续指向最后一个已发布的正式 ZIP：
 
 ```text
 credential-guard-0.4.4-hermes-plugin.zip
 ```
 
-正式下载（GitHub Release 发布后；当前制品亦可从本仓库 `dist/` 取得）：
+如果你是从本仓库源码直接取用 0.4.5 制品，请改用 `dist/credential-guard-0.4.5-hermes-plugin.zip`，并按下文「开发与验证」列出的 SHA-256 自行核对；本节配方在 0.4.5 正式发布后一并切换。
+
+正式下载（GitHub Release 发布后；当前可核验制品亦可从本仓库 `dist/` 取得）：
 
 ```text
 https://github.com/stones-hub/hermes-credential-guard/releases/download/v0.4.4/credential-guard-0.4.4-hermes-plugin.zip
@@ -250,7 +292,21 @@ chmod 700 "$STORE_DIR"
 
 ```bash
 chmod 600 "$GUARD_CONFIG"
+hermes credential-guard validate
+hermes credential-guard refresh-targets
 ```
+
+`validate` 只读校验主配置（见下文「离线校验」）；通过后再 `refresh-targets`。
+
+`refresh-targets` 会生成本机安全目标清单旁车 `credential-guard.targets.json`（同目录、权限 `0600`）。该文件只含模型可见的 binding 清单，不含秘密；由插件生成，用户不要编辑。Hermes 启动时只读旁车来填充工具描述；正式保护与执行仍只依赖主配置。
+
+正式配置写入 helper `replace_config_and_refresh_targets` 的语义：
+
+- 主配置替换前失败 → 原有 Config/Lock 错误；配置未提交。
+- 主配置已提交但旁车生成失败 → 抛出固定错误码 `CONFIG_COMMITTED_TARGET_CATALOG_UNAVAILABLE`（专用部分提交错误）：新主配置已生效；旧旁车会因 identity 不一致而在启动时静态 fallback。CLI `refresh-targets` 不是配置 writer，失败时只报普通固定错误。
+- 旁车写入时的目录 `fsync` 为 best-effort：不宣称崩溃持久性强保证；identity 不一致时仍安全 fallback。
+
+模型可见字段（binding 名、被引用的 credential 名、HTTP method/path）不得等于或包含任一 token/password 明文；否则 Schema 以 `CONFIG_SCHEMA` fail-closed，错误信息不回显秘密值。
 
 Store 必须是当前用户拥有的普通目录，权限严格为 `0700`；配置必须是当前用户拥有的普通文件，权限严格为 `0600`。目录和文件都不能是 symlink。
 
@@ -693,6 +749,24 @@ path       = /health
 credential = <CREDENTIAL:internal-test-token>
 ```
 
+## 模型如何知道可用目标
+
+两个工具的 `description` 会在 Hermes 启动 / 插件注册时，根据本机**安全目标清单旁车**（`credential-guard.targets.json`）列出当前安全目标与正确的 `<CREDENTIAL:name>` 写法。
+
+- 旁车由插件自动生成，**不要手工编辑**。
+- 正式配置仍是唯一真源：`credential-guard.json`（含秘密）。
+- 手工编辑 `credential-guard.json` 后，请运行 `hermes credential-guard refresh-targets`，再重启 Hermes。
+- 旁车缺失、过期（与主配置文件身份不一致）、权限不安全或内容非法时，工具描述退化为静态文案；**不影响**正式 egress / 审批 / 执行（它们仍读取并验证主配置）。
+- 配置变更后需要重启 Hermes 才会刷新模型可见清单。
+
+## 不要使用 `<SECRET:cg_xxx>`
+
+主聊天脱敏与主链工具结果回流对已登记凭证都替换为同一死代号 `<SECRET:cg_xxx>`。它只是脱敏后的代号，不能当作凭证引用，也不能反查成真值。正确写法是工具 description 中列出的 `<CREDENTIAL:name>`。
+
+## 未登记风险提醒的边界
+
+对部分带明显前缀的疑似未登记凭证（如 OpenAI `sk-`、GitHub `ghp_` 等），插件可能在本地 stderr 打出固定风险提醒。这不是安全兜底：不阻断、不脱敏、不改写请求内容，提醒写入为 best-effort 且不影响聊天推进；疑似内容仍会原样发给模型；也可能遗漏或误报。要把凭证纳入保护，仍须写入本机配置（见上文「不保护」结论）。
+
 ## 使用 `process_env` 或 `stdin` binding
 
 ```text
@@ -726,6 +800,20 @@ credential = <CREDENTIAL:service-token>
 真实 Token、密码、完整 Authorization Header 和程序秘密输入不应出现在审批信息中。
 
 # 检查和生效
+
+## 离线校验（C10）
+
+编辑完 `credential-guard.json` 后，可先离线校验再刷新旁车 / 重启：
+
+```bash
+hermes -p "$PROFILE" credential-guard validate
+# 或显式指定文件：
+hermes -p "$PROFILE" credential-guard validate /path/to/credential-guard.json
+```
+
+成功时对每个 credential / binding 输出 `PASS …`，最后一行 `VALID`（退出码 0）。失败时输出一行 `FAIL <固定错误码> <安全定位>`（退出码 1）；无法安全定位时定位为 `configuration`。stdout/stderr 不含凭证值、host、program、argv、env/header 名、allowed path、JSON 正文或异常正文。
+
+**纯插件限制（须如实知晓）**：`credential-guard` 子命令由插件在 Hermes 加载/启用时注册；插件未加载或未启用时，宿主不会发现该命令（这是当前 Hermes 纯插件接口的能力边界，不是本校验逻辑本身要求“运行配置已成功”）。校验过程只读目标文件（缺省为 `default_config_path()`），不发布 RuntimeView、不生成旁车、不写任何文件、不调用 Provider/adapter，也不要求当前运行配置有效。
 
 检查插件、配置、拦截点、工具和保护注册表：
 
@@ -795,14 +883,15 @@ $PROFILE_ROOT/credential-guard/
 
 # 当前边界
 
-0.4.4 正式保护：
+0.4.5 正式保护：
 
 - Hermes 主聊天 conversation loop 的模型请求；
 - 主链工具结果；
 - 协议骨架字段（`model` / `role` / `name` / `tool_call_id`）命中已登记凭证变体时本机 fail-closed。
 
-0.4.4 不保证覆盖：
+0.4.5 不保证覆盖：
 
+- **未登记的凭证** —— 没有写进 `credentials` 的 Key / 密码 / Token 原样发送给模型，插件不做通用格式识别；
 - 自动标题；
 - 上下文压缩；
 - Vision；
@@ -842,7 +931,24 @@ Credential Guard 不能把恶意本地程序变安全。`process_env` 和 `stdin
 CG_R6_BUILD_AUTHORIZED=1 .venv/bin/python scripts/build_release_artifacts.py
 ```
 
-当前活动 `dist/` 含已落地的 0.4.4 四制品，并保留历史 0.4.2 / 已 Tag 的 0.4.3：
+当前活动 `dist/` 共 16 件：历史 0.4.2 / 已 Tag 的 0.4.3 / 已发布的 0.4.4 各四件，加上本轮真实双构建落地的 0.4.5 四件。历史 12 件在 0.4.5 构建前后 SHA-256 零漂移。
+
+0.4.5 四制品（实测 SHA-256，与 `dist/artifact-manifest-0.4.5.json` 逐项一致）：
+
+```text
+dist/credential-guard-0.4.5-hermes-plugin.zip
+  a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3
+dist/hermes_credential_guard-0.4.5-py3-none-any.whl
+  8d9e0fbf7acd27474575af5b883a00e0f16acf566a4b49e5ef68e05b5c8cdb32
+dist/hermes_credential_guard-0.4.5.tar.gz
+  6b133e1d06a09a7c10415f74eca0f2e7d2637058636683ef89244c6b80aa027e
+dist/artifact-manifest-0.4.5.json
+  ac56634322fb474093904036d77702f696791b29e6a841e76661bb147bbf1ed6
+```
+
+两次完全独立的构建产出逐字节相同的 wheel / sdist / plugin zip / manifest（`source_date_epoch=1704067200`、`tz=UTC`、`pythonhashseed=0`、归一化归档）。
+
+上一个已发布版本 0.4.4 四制品（零漂移保留）：
 
 ```text
 dist/credential-guard-0.4.4-hermes-plugin.zip
@@ -850,6 +956,8 @@ dist/artifact-manifest-0.4.4.json
 dist/hermes_credential_guard-0.4.4-py3-none-any.whl
 dist/hermes_credential_guard-0.4.4.tar.gz
 ```
+
+> 构建脚本按版本锚定清理：只清理当前版本的正式文件名与其 `.tmp` 半成品，其它版本的已发布制品一律不动。
 
 历史 0.4.3 锚点（零漂移保留）：
 

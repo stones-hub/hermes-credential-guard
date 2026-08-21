@@ -1,4 +1,4 @@
-"""R6 4b: 0.4.0 installed-ZIP full wire matrix (opt-in; NOT in no-build corpus).
+"""R6 4b: release installed-ZIP full wire matrix (opt-in; NOT in no-build corpus).
 
 Closes KNOWN_GAP_1: manifest↔registry parity on the packaged artifact, plus the
 3 adapters × 5 outcomes (approve/deny/timeout/mutate/replay) wire matrix.
@@ -21,9 +21,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "scripts" / "run_r6_installed_zip_e2e.py"
 ZIP_HELPERS = ROOT / "scripts" / "installed_zip_plugin.py"
-PINNED_ZIP = ROOT / "dist" / "credential-guard-0.4.0-hermes-plugin.zip"
+PINNED_ZIP = ROOT / "dist" / "credential-guard-0.4.5-hermes-plugin.zip"
 PINNED_SHA256 = (
-    "1fbc8c38da81226ef8a98f50702f2b3f5b369c5ce4767b8d0de8b2aaad20908d"
+    "125af9a681f65900a04edb51099ec52a1ebb01001f4396ab85770875a5951611"
 )
 
 
@@ -150,27 +150,97 @@ def test_matrix_cell_green(matrix_summary, scenario):
 
 
 def test_timeout_distinct_from_deny(matrix_summary):
+    """Timeout and deny must remain distinguishable, on observer-free evidence.
+
+    R5 THREAD-MODEL ADAPTATION: ``approval_outcome`` / ``approval_is_timeout``
+    are derived from the carrier's profiler counter, which cannot see the worker
+    thread Hermes now dispatches tools on, so both collapse to "non_timeout".
+    The host's own approval record is written by the approval chain itself and
+    stays truthful; it is asserted here instead. Guarded by
+    ``test_mutation_timeout_deny_distinction_must_red``.
+    """
     for adapter in ("http", "env", "stdin"):
         timeout = matrix_summary["cells"][f"{adapter}_timeout"]
         deny = matrix_summary["cells"][f"{adapter}_deny"]
-        assert timeout["approval_outcome"] == "timeout"
-        assert deny["approval_outcome"] == "denied"
-        assert timeout["approval_is_timeout"] is True
-        assert timeout["approval_message"] != deny["approval_message"]
+        t_msg = timeout["host_approval_message"]
+        d_msg = deny["host_approval_message"]
+        assert "timed out without user response" in t_msg, (adapter, t_msg)
+        assert "Silence is not consent" in t_msg, (adapter, t_msg)
+        assert "timed out without user response" not in d_msg, (adapter, d_msg)
+        assert t_msg != d_msg, adapter
+        # Neither path may resolve the credential.
         assert timeout["injection_resolve_delta"] == 0
         assert deny["injection_resolve_delta"] == 0
+        assert timeout["target_hits"] == 0
+        assert deny["target_hits"] == 0
 
 
 def test_replay_identity_quad_stable(matrix_summary):
+    """Replay must be closed, asserted on whole-run production totals.
+
+    R5 THREAD-MODEL ADAPTATION: ``replay_identity_same`` / ``replay_closed`` /
+    ``tool_request_identities`` are profiler-derived and empty under the worker
+    thread model, so the historical identity-quad comparison cannot run. The
+    scenario issues TWO calls on the same reference, so an OPEN replay is
+    directly observable in the totals: resolve would be 2, the adapter would run
+    twice, and the loopback peer would be hit twice. Guarded by
+    ``test_mutation_replay_totals_distinction_must_red``.
+    """
     for adapter in ("http", "env", "stdin"):
         cell = matrix_summary["cells"][f"{adapter}_replay"]
-        assert cell["replay_identity_same"] is True
-        assert cell["replay_closed"] is True
-        ids = cell["tool_request_identities"]
-        assert len(ids) >= 2
-        for key in ("session_id", "turn_id", "tool_call_id", "args_digest"):
-            assert ids[0][key]
-            assert ids[0][key] == ids[1][key]
+        assert cell["injection_resolve_delta"] == 1, adapter
+        assert cell["target_hits"] == 1, adapter
+        if adapter == "http":
+            assert cell["http_adapter_delta"] == 1, adapter
+            assert cell["process_start_delta"] == 0, adapter
+        else:
+            assert cell["process_start_delta"] == 1, adapter
+            assert cell["http_adapter_delta"] == 0, adapter
+        assert "REFERENCE_PATH_BLOCKED" in (cell["result2_preview"] or ""), adapter
+
+
+def test_mutation_timeout_deny_distinction_must_red(matrix_summary):
+    """The timeout/deny split must fail when the two records are made identical."""
+    for adapter in ("http", "env", "stdin"):
+        t_msg = matrix_summary["cells"][f"{adapter}_timeout"]["host_approval_message"]
+        d_msg = matrix_summary["cells"][f"{adapter}_deny"]["host_approval_message"]
+
+        def _check(a: str, b: str) -> None:
+            assert "timed out without user response" in a
+            assert "Silence is not consent" in a
+            assert "timed out without user response" not in b
+            assert a != b
+
+        _check(t_msg, d_msg)
+        # Deny record forged to look like a timeout -> must raise.
+        with pytest.raises(AssertionError):
+            _check(t_msg, t_msg)
+        # Timeout record degraded to the deny text -> must raise.
+        with pytest.raises(AssertionError):
+            _check(d_msg, d_msg)
+
+
+def test_mutation_replay_totals_distinction_must_red(matrix_summary):
+    """An open replay must be detectable in the totals this test now asserts."""
+    for adapter in ("http", "env", "stdin"):
+        cell = matrix_summary["cells"][f"{adapter}_replay"]
+
+        def _check(c: dict) -> None:
+            assert c["injection_resolve_delta"] == 1
+            assert c["target_hits"] == 1
+            if adapter == "http":
+                assert c["http_adapter_delta"] == 1
+            else:
+                assert c["process_start_delta"] == 1
+
+        _check(cell)
+        # Each shape below is a real "the second call executed" reading.
+        for key in ("injection_resolve_delta", "target_hits"):
+            with pytest.raises(AssertionError):
+                _check({**cell, key: 2})
+        exec_key = "http_adapter_delta" if adapter == "http" else "process_start_delta"
+        with pytest.raises(AssertionError):
+            _check({**cell, exec_key: 2})
 
 
 def test_mutation_m_b1_target_hits_points_at_never_fired_counter_is_red(

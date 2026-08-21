@@ -513,7 +513,9 @@ def test_mutation_reverting_toolset_import_to_tools_is_red(
     )
     # Sibling stubs so the full mutated module body can execute until .tools.
     (pkg / "runtime_config.py").write_text(
-        'HTTP_REFERENCE_TOOL = "http_credential_request"\n',
+        'HTTP_REFERENCE_TOOL = "http_credential_request"\n'
+        "def get_runtime_view():\n"
+        "    raise RuntimeError('stub')\n",
         encoding="utf-8",
     )
     (pkg / "bindings.py").write_text(
@@ -523,6 +525,20 @@ def test_mutation_reverting_toolset_import_to_tools_is_red(
     )
     (pkg / "tool_execution.py").write_text(
         "def finalize_reference_execution(*a, **k):\n    return ''\n",
+        encoding="utf-8",
+    )
+    (pkg / "credential_code.py").write_text(
+        "def is_redacted_credential_code(value):\n"
+        "    return False\n"
+        "\n"
+        "def credential_code_not_usable_error():\n"
+        "    return '{}'\n",
+        encoding="utf-8",
+    )
+    # process_tools imports compose_binding_tool_description; overwritten when
+    # the victim itself is reference_tools.py.
+    (pkg / "reference_tools.py").write_text(
+        "def compose_binding_tool_description(*a, **k):\n    return ''\n",
         encoding="utf-8",
     )
     (pkg / Path(victim_rel).name).write_text(mutated, encoding="utf-8")

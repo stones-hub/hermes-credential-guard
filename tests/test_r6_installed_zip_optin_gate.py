@@ -88,8 +88,8 @@ def test_optin_runner_owns_selection_and_never_authorizes_build():
 
 def test_harness_pins_expected_zip_sha256():
     src = (ROOT / HARNESS_REL).read_text(encoding="utf-8")
-    assert "1fbc8c38da81226ef8a98f50702f2b3f5b369c5ce4767b8d0de8b2aaad20908d" in src
-    assert "credential-guard-0.4.0-hermes-plugin.zip" in src
+    assert "125af9a681f65900a04edb51099ec52a1ebb01001f4396ab85770875a5951611" in src
+    assert "credential-guard-0.4.5-hermes-plugin.zip" in src
     tree = ast.parse(src)
     assert isinstance(tree, ast.Module)
     # Must reuse the shared installer, not re-implement extract/copytree.

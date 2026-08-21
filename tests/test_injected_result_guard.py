@@ -6,11 +6,15 @@ import json
 import logging
 import os
 import re
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any, List, Tuple
 
 import pytest
 
 from credential_guard.hooks import on_transform_tool_result
+from credential_guard.models import make_token_id
 from credential_guard.state import get_registry
 
 SAFE_FAIL = (
@@ -21,6 +25,10 @@ REDACTED = "<REDACTED_SECRET>"
 
 DECOY_TOKEN = "cg_r4_decoy_token_ABCDEF12"
 DECOY_PASS = "cg_r4_decoy_pass_XYZabc99"
+
+
+def _session_token(name: str) -> str:
+    return f"<SECRET:{make_token_id(name, 'value')}>"
 
 
 @pytest.fixture(autouse=True)
@@ -64,12 +72,13 @@ def test_preserve_clean_json_whitespace_and_field_order():
 
 
 def test_registered_secret_in_json_string_replaces_fragment_only():
-    get_registry().register("api", "value", DECOY_TOKEN)
+    item = get_registry().register("api", "value", DECOY_TOKEN)
     raw = '{\n  "msg": "token=' + DECOY_TOKEN + '",\n  "ok": true\n}'
     out = _guard(raw)
     assert DECOY_TOKEN not in out
-    assert "<CREDENTIAL:api>" in out
-    assert out == raw.replace(DECOY_TOKEN, "<CREDENTIAL:api>")
+    assert item.token in out
+    assert "<CREDENTIAL:" not in out
+    assert out == raw.replace(DECOY_TOKEN, item.token)
 
 
 def test_preserve_markdown_table_chinese_numbers_bools():
@@ -82,9 +91,9 @@ def test_preserve_markdown_table_chinese_numbers_bools():
 
 
 def test_registered_plain_text_uses_credential_placeholder():
-    get_registry().register("db", "password", DECOY_PASS)
+    item = get_registry().register("db", "password", DECOY_PASS)
     out = _guard(f"error {DECOY_PASS} trailing")
-    assert out == f"error <CREDENTIAL:db> trailing"
+    assert out == f"error {item.token} trailing"
 
 
 # ---------------------------------------------------------------------------
@@ -120,37 +129,38 @@ def test_auth_header_cookie_value_fully_redacted(raw: str, expect_substr: str):
 
 
 def test_auth_header_unique_registered_keeps_credential_placeholder():
-    """B2: unique registered secret in Authorization → whole value <CREDENTIAL:name>."""
-    get_registry().register("api", "token", DECOY_TOKEN)
+    """B2: unique registered secret in Authorization → whole value registry token."""
+    item = get_registry().register("api", "token", DECOY_TOKEN)
     raw = f"Authorization: Bearer {DECOY_TOKEN}"
     out = _guard(raw)
-    assert out == "Authorization: <CREDENTIAL:api>"
+    assert out == f"Authorization: {item.token}"
     assert DECOY_TOKEN not in out
     assert REDACTED not in out
+    assert "<CREDENTIAL:" not in out
 
 
 def test_proxy_authorization_unique_registered_keeps_credential_placeholder():
-    get_registry().register("api", "token", DECOY_TOKEN)
+    item = get_registry().register("api", "token", DECOY_TOKEN)
     raw = f"Proxy-Authorization: Basic {DECOY_TOKEN}"
     out = _guard(raw)
-    assert out == "Proxy-Authorization: <CREDENTIAL:api>"
+    assert out == f"Proxy-Authorization: {item.token}"
     assert REDACTED not in out
 
 
 def test_cookie_unique_registered_keeps_credential_placeholder():
-    get_registry().register("sess", "token", DECOY_TOKEN)
+    item = get_registry().register("sess", "token", DECOY_TOKEN)
     raw = f"Cookie: session={DECOY_TOKEN}; theme=dark"
     out = _guard(raw)
-    assert out == "Cookie: <CREDENTIAL:sess>"
+    assert out == f"Cookie: {item.token}"
     assert DECOY_TOKEN not in out
     assert REDACTED not in out
 
 
 def test_set_cookie_unique_registered_keeps_credential_placeholder():
-    get_registry().register("sess", "token", DECOY_TOKEN)
+    item = get_registry().register("sess", "token", DECOY_TOKEN)
     raw = f"Set-Cookie: session={DECOY_TOKEN}; Path=/; Secure"
     out = _guard(raw)
-    assert out == "Set-Cookie: <CREDENTIAL:sess>"
+    assert out == f"Set-Cookie: {item.token}"
     assert REDACTED not in out
 
 
@@ -174,22 +184,23 @@ def test_auth_header_multiple_registered_identities_redacted_secret():
 
 
 def test_auth_header_preserves_name_and_colon_spacing():
-    get_registry().register("api", "token", DECOY_TOKEN)
+    item = get_registry().register("api", "token", DECOY_TOKEN)
     raw = f"Authorization:\t{DECOY_TOKEN}"
     out = _guard(raw)
-    assert out == "Authorization:\t<CREDENTIAL:api>"
+    assert out == f"Authorization:\t{item.token}"
 
 
 def test_mutation_auth_always_redacted_secret_kills_credential_keep(monkeypatch):
     """Mutation: forcing auth values to REDACTED_SECRET must fail unique-registered keep."""
     import credential_guard.result_guard as rg
 
-    get_registry().register("api", "token", DECOY_TOKEN)
+    item = get_registry().register("api", "token", DECOY_TOKEN)
     monkeypatch.setattr(
         rg, "_auth_cookie_replacement_value", lambda _value: rg.REDACTED_SECRET
     )
     out = rg.guard_tool_result(f"Authorization: Bearer {DECOY_TOKEN}", get_registry())
     assert out == f"Authorization: {REDACTED}"
+    assert item.token not in out
     assert "<CREDENTIAL:api>" not in out
 
 
@@ -249,11 +260,11 @@ def test_safe_exception_text_keeps_type_code_ids():
 
 
 def test_exception_with_registered_secret_point_replace():
-    get_registry().register("svc", "value", DECOY_TOKEN)
+    item = get_registry().register("svc", "value", DECOY_TOKEN)
     raw = f"HTTPError: upstream rejected token={DECOY_TOKEN} request_id=r1"
     out = _guard(raw)
     assert out == (
-        f"HTTPError: upstream rejected token=<CREDENTIAL:svc> request_id=r1"
+        f"HTTPError: upstream rejected token={item.token} request_id=r1"
     )
 
 
@@ -312,6 +323,7 @@ def test_guard_block_does_not_invoke_downstream_tool(monkeypatch):
 
 def test_guard_fail_logs_only_fixed_reason_code(caplog, monkeypatch):
     import credential_guard.result_guard as rg
+    from credential_guard.local_events import wait_fail_closed_idle_for_tests
 
     if not hasattr(rg, "redact_registered"):
         pytest.skip("redact_registered not yet defined")
@@ -324,10 +336,147 @@ def test_guard_fail_logs_only_fixed_reason_code(caplog, monkeypatch):
     caplog.set_level(logging.WARNING, logger="credential_guard")
     out = _guard(f"x {DECOY_TOKEN}")
     assert out == SAFE_FAIL
+    assert wait_fail_closed_idle_for_tests(timeout=2.0)
     joined = "\n".join(r.getMessage() for r in caplog.records)
     assert DECOY_TOKEN not in joined
     assert "secret=" not in joined
     assert "result_guard" in joined.lower() or "credential-guard" in joined.lower()
+
+
+def test_result_guard_failclosed_log_global_stderr_backpressure_caller_finishes(tmp_path):
+    """guard_tool_result internal catch must not stall on blocked stderr lastResort."""
+    repo = Path(__file__).resolve().parents[1]
+    marker = tmp_path / "rg_fc_stderr_marker"
+    status = tmp_path / "rg_fc_stderr_status"
+    script = f"""
+import logging
+import os
+import sys
+import tempfile
+import threading
+from pathlib import Path
+
+repo = {str(repo)!r}
+sys.path.insert(0, repo)
+os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
+os.environ["PYTHONPATH"] = repo
+
+home = Path(tempfile.mkdtemp()) / "home"
+hermes = Path(tempfile.mkdtemp()) / "hermes"
+home.mkdir(parents=True)
+hermes.mkdir(parents=True)
+os.environ["HOME"] = str(home)
+os.environ["HERMES_HOME"] = str(hermes)
+
+from credential_guard.result_guard import RESULT_GUARD_FAIL_TEXT, guard_tool_result
+from credential_guard.registry import CredentialRegistry
+import credential_guard.result_guard as rg
+
+cg_log = logging.getLogger("credential_guard")
+cg_log.handlers.clear()
+cg_log.propagate = True
+logging.root.handlers.clear()
+
+entered = threading.Event()
+never = threading.Event()
+
+
+class BlockingStderr:
+    def write(self, data):
+        entered.set()
+        never.wait()
+        return len(data) if data else 0
+
+    def flush(self):
+        return None
+
+    def isatty(self):
+        return False
+
+    def fileno(self):
+        raise OSError("no fileno")
+
+
+sys.stderr = BlockingStderr()
+
+decoy = "RG_FC_DECOY_NEVER_ECHO_88"
+
+
+def boom(*_a, **_k):
+    raise RuntimeError(f"redact boom {{decoy}}")
+
+
+rg.redact_registered = boom
+
+run_done = threading.Event()
+result_box = []
+errors = []
+
+
+def run():
+    try:
+        result_box.append(
+            guard_tool_result(f"leak {{decoy}}", CredentialRegistry())
+        )
+    except Exception as exc:  # pragma: no cover
+        errors.append(repr(exc))
+    finally:
+        run_done.set()
+
+
+t = threading.Thread(target=run, daemon=True)
+t.start()
+
+status_path = Path({str(status)!r})
+marker_path = Path({str(marker)!r})
+
+if not entered.wait(timeout=3.0):
+    status_path.write_text("WRITE_NOT_ENTERED", encoding="utf-8")
+    os._exit(3)
+if not run_done.wait(timeout=2.0):
+    status_path.write_text("CALLER_STALLED", encoding="utf-8")
+    os._exit(2)
+if errors:
+    status_path.write_text("RUN_ERROR:" + ";".join(errors), encoding="utf-8")
+    os._exit(4)
+if not result_box:
+    status_path.write_text("NO_RESULT", encoding="utf-8")
+    os._exit(5)
+out = result_box[0]
+if out != RESULT_GUARD_FAIL_TEXT:
+    status_path.write_text("RESULT_MISMATCH:" + repr(out)[:200], encoding="utf-8")
+    os._exit(6)
+if decoy in out:
+    status_path.write_text("DECOY_ECHO", encoding="utf-8")
+    os._exit(7)
+if "redact boom" in out:
+    status_path.write_text("EXC_ECHO", encoding="utf-8")
+    os._exit(8)
+
+marker_path.write_text("PASS", encoding="utf-8")
+status_path.write_text("PASS", encoding="utf-8")
+os._exit(0)
+"""
+    env = {
+        **os.environ,
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": str(repo),
+    }
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=str(repo),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    status_text = status.read_text(encoding="utf-8") if status.exists() else "<missing>"
+    assert proc.returncode == 0, (
+        f"rc={proc.returncode} status={status_text!r}\n"
+        f"stdout={proc.stdout[-2000:]}\nstderr={proc.stderr[-2000:]}"
+    )
+    assert marker.read_text(encoding="utf-8") == "PASS"
+    assert status_text == "PASS"
 
 
 # ---------------------------------------------------------------------------
@@ -342,8 +491,10 @@ def test_session_materials_merge_and_credential_placeholder():
     registry = get_egress_registry_snapshot()
     materials: List[Tuple[str, str]] = [("http_token", DECOY_TOKEN)]
     raw = f"echoed={DECOY_TOKEN} ok"
+    tok = _session_token("http_token")
     out = guard_tool_result(raw, registry, session_materials=materials)
-    assert out == f"echoed=<CREDENTIAL:http_token> ok"
+    assert out == f"echoed={tok} ok"
+    assert "<CREDENTIAL:" not in out
     # Idempotent second pass.
     out2 = guard_tool_result(out, registry, session_materials=materials)
     assert out2 == out
@@ -360,7 +511,8 @@ def test_process_style_business_output_preserved_with_secret_replaced():
     assert "STATUS=0" in out
     assert "ENV_PROBE=ABSENT" in out
     assert DECOY_TOKEN not in out
-    assert "<CREDENTIAL:cli_token>" in out
+    assert _session_token("cli_token") in out
+    assert "<CREDENTIAL:" not in out
     assert "PROCESS_OUTPUT_LEAK" not in out
     assert "***" not in out
 
@@ -384,20 +536,20 @@ def test_large_clean_log_byte_identical():
 def test_large_result_secret_at_head_mid_tail():
     from credential_guard.sensitive_paths import MAX_PRIVATE_KEY_CANDIDATE_LENGTH
 
-    get_registry().register("api", "value", DECOY_TOKEN)
+    item = get_registry().register("api", "value", DECOY_TOKEN)
     pad = "x" * 10_000
     raw = f"{DECOY_TOKEN}{pad}{DECOY_TOKEN}{pad}{DECOY_TOKEN}"
     assert len(raw) < MAX_PRIVATE_KEY_CANDIDATE_LENGTH
     out = _guard(raw)
     assert DECOY_TOKEN not in out
-    assert out.count("<CREDENTIAL:api>") == 3
-    assert out == raw.replace(DECOY_TOKEN, "<CREDENTIAL:api>")
+    assert out.count(item.token) == 3
+    assert out == raw.replace(DECOY_TOKEN, item.token)
 
 
 def test_large_result_secret_near_common_buffer_boundaries():
     from credential_guard.sensitive_paths import MAX_PRIVATE_KEY_CANDIDATE_LENGTH
 
-    get_registry().register("api", "value", DECOY_TOKEN)
+    item = get_registry().register("api", "value", DECOY_TOKEN)
     # Common buffer edges within the existing candidate-length ceiling.
     positions = (4095, 4096, 8191, 8192, 16383, 16384, 32767, 32768)
     for pos in positions:
@@ -405,7 +557,7 @@ def test_large_result_secret_near_common_buffer_boundaries():
         assert len(raw) < MAX_PRIVATE_KEY_CANDIDATE_LENGTH
         out = _guard(raw)
         assert DECOY_TOKEN not in out
-        assert out == raw.replace(DECOY_TOKEN, "<CREDENTIAL:api>")
+        assert out == raw.replace(DECOY_TOKEN, item.token)
 
 
 def test_scan_exception_on_large_input_fail_closed(monkeypatch):
@@ -560,7 +712,8 @@ def test_http_adapter_echo_uses_credential_placeholder(tmp_path, monkeypatch):
     dumped = json.dumps(result)
     assert DECOY_TOKEN not in dumped
     assert result["ok"] is True
-    assert "<CREDENTIAL:jenkins-token>" in dumped
+    assert _session_token("jenkins-token") in dumped
+    assert "<CREDENTIAL:" not in dumped
     assert "***" not in dumped
     again = guard_tool_result(dumped, CredentialRegistry())
     assert again == dumped
@@ -606,7 +759,8 @@ def test_process_adapter_echo_preserves_business_output(tmp_path):
         assert result["ok"] is True
         assert "STATUS=0" in result["stdout"]
         assert DECOY_TOKEN not in result["stdout"]
-        assert "<CREDENTIAL:cli_token>" in result["stdout"]
+        assert _session_token("cli_token") in result["stdout"]
+        assert "<CREDENTIAL:" not in result["stdout"]
         assert result.get("error") != "PROCESS_OUTPUT_LEAK"
         assert "***" not in result["stdout"]
     finally:

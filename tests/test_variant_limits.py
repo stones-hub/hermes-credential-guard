@@ -155,7 +155,7 @@ def test_t6_mutation_remove_result_guard_count_gate_is_red(monkeypatch):
     monkeypatch.setattr("credential_guard.redactor.MAX_REGISTRY_ITEMS", 2)
     get_registry().register("a", "password", "secret_aaa_01")
     get_registry().register("b", "password", "secret_bbb_02")
-    get_registry().register("c", "password", "secret_ccc_03")
+    item_c = get_registry().register("c", "password", "secret_ccc_03")
     _assert_tool_safe("secret_ccc_03")
 
     def merge_without_count(registry, session_materials=None):
@@ -184,7 +184,8 @@ def test_t6_mutation_remove_result_guard_count_gate_is_red(monkeypatch):
     )
     # Gate removed → over-limit path redacts instead of fail-closed (mutation RED signal).
     assert out != RESULT_GUARD_FAIL_TEXT
-    assert "<CREDENTIAL:c>" in out
+    assert item_c.token in out
+    assert "<CREDENTIAL:c>" not in out
     assert "secret_ccc_03" not in out
 
 
@@ -195,7 +196,7 @@ def test_t6_mutation_remove_result_guard_total_chars_gate_is_red(monkeypatch):
 
     monkeypatch.setattr(redactor_mod, "MAX_TOTAL_VARIANT_CHARS", 40)
     secret = "variant_limit_secret_001"
-    get_registry().register("db", "password", secret)
+    item = get_registry().register("db", "password", secret)
     _assert_tool_safe(secret)
 
     def merge_without_chars(registry, session_materials=None):
@@ -221,12 +222,15 @@ def test_t6_mutation_remove_result_guard_total_chars_gate_is_red(monkeypatch):
         result=f"leak {secret}", tool_name="dummy", arguments={}
     )
     assert out != RESULT_GUARD_FAIL_TEXT
-    assert "<CREDENTIAL:db>" in out
+    assert item.token in out
+    assert "<CREDENTIAL:db>" not in out
     assert secret not in out
 
 
 def test_t6_variant_builder_exception_fail_closed(monkeypatch, caplog):
     import logging
+
+    from credential_guard.local_events import wait_fail_closed_idle_for_tests
 
     secret = "variant_boom_secret_01"
     get_registry().register("db", "password", secret)
@@ -240,6 +244,7 @@ def test_t6_variant_builder_exception_fail_closed(monkeypatch, caplog):
     _assert_exec_blocked(secret)
     _assert_request_safe(secret)
     _assert_tool_safe(secret)
+    assert wait_fail_closed_idle_for_tests(timeout=2.0)
     joined = "\n".join(r.message for r in caplog.records)
     assert secret not in joined
 
@@ -284,6 +289,8 @@ def test_t6_encoded_private_key_scanner_overlimit_fail_closed():
 def test_t6_encoded_private_key_scanner_exception_fail_closed(monkeypatch, caplog):
     import logging
 
+    from credential_guard.local_events import wait_fail_closed_idle_for_tests
+
     secret = "scan_boom_secret_0001"
     get_registry().register("db", "password", secret)
     caplog.set_level(logging.WARNING, logger="credential_guard")
@@ -301,6 +308,7 @@ def test_t6_encoded_private_key_scanner_exception_fail_closed(monkeypatch, caplo
     _assert_exec_blocked(secret)
     _assert_request_safe(secret)
     _assert_tool_safe(secret)
+    assert wait_fail_closed_idle_for_tests(timeout=2.0)
     joined = "\n".join(r.message for r in caplog.records)
     assert secret not in joined
 

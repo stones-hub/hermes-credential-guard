@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
-from .runtime_config import HTTP_REFERENCE_TOOL
+from .credential_code import (
+    credential_code_not_usable_error,
+    is_redacted_credential_code,
+)
+from .runtime_config import HTTP_REFERENCE_TOOL, get_runtime_view
 from .tool_execution import finalize_reference_execution
 from .constants import TOOLSET_NAME
 
@@ -26,16 +30,128 @@ _UNSAFE_PATH_CHARS = re.compile(
     r"[\x00-\x1f\x7f-\x9f\\\u0085\u2028\u2029]"
 )
 
-TOOL_DESCRIPTION = (
-    "逻辑引用请求外壳：提交业务目标、HTTP method/path 与 <CREDENTIAL:name> 引用；"
-    "须经人工审批；R3A 批准后仅在本机结构化 HTTP 适配器中短暂注入，模型拿不到真值。"
+DESCRIPTION_CHAR_LIMIT = 12000
+_OMISSION_LINE = "另有 {n} 个目标未展示，请查看本机配置"
+
+_HTTP_INTRO = (
+    "逻辑引用请求外壳：使用本机配置的凭证访问已登记 HTTP 目标。"
+    "凭证不能从对话传入。"
 )
+# Keep bare "R3" for historical registration wording tests; never R3A/R3B.
+_HTTP_OUTRO = (
+    "须经人工审批；R3 边界下批准后仅在本机短暂注入，模型拿不到真值。"
+    "配置更新后需重启 Hermes 才会刷新此清单。"
+)
+
+TOOL_DESCRIPTION = f"{_HTTP_INTRO}\n{_HTTP_OUTRO}"
+
+
+def compose_binding_tool_description(
+    *,
+    intro: str,
+    outro: str,
+    entry_lines: Sequence[str],
+    limit: int = DESCRIPTION_CHAR_LIMIT,
+) -> str:
+    """Assemble intro + sorted entries + outro; truncate by whole entries only."""
+    if not entry_lines:
+        text = f"{intro}\n{outro}"
+        return text if len(text) <= limit else text[:limit]
+
+    header = f"{intro}\n当前可用目标：\n"
+    full_body = "\n".join(entry_lines)
+    full = f"{header}{full_body}\n{outro}"
+    if len(full) <= limit:
+        return full
+
+    kept: list[str] = []
+    total = len(entry_lines)
+    for line in entry_lines:
+        trial = kept + [line]
+        omitted = total - len(trial)
+        pieces = [header + "\n".join(trial)]
+        if omitted:
+            pieces.append(_OMISSION_LINE.format(n=omitted))
+        pieces.append(outro)
+        candidate = "\n".join(pieces)
+        if len(candidate) <= limit:
+            kept = trial
+        else:
+            break
+
+    if not kept:
+        omitted_all = _OMISSION_LINE.format(n=total)
+        fallback = f"{intro}\n{omitted_all}\n{outro}"
+        if len(fallback) <= limit:
+            return fallback
+        return f"{intro}\n{outro}"[:limit]
+
+    omitted = total - len(kept)
+    return (
+        f"{header}{chr(10).join(kept)}\n"
+        f"{_OMISSION_LINE.format(n=omitted)}\n"
+        f"{outro}"
+    )
+
+
+def _safe_runtime_bindings() -> Optional[Mapping[str, Any]]:
+    """READY → sidecar; PREPARED_INVALID → static; UNPREPARED → RuntimeView."""
+    try:
+        from .target_catalog import resolve_registration_catalog
+
+        prepared, bindings = resolve_registration_catalog()
+        if prepared:
+            # READY (bindings mapping) or PREPARED_INVALID (None → static).
+            # Never fall through to RuntimeView after prepare().
+            return bindings
+    except Exception:
+        # Prepared-path errors must static-fallback; do not read RuntimeView.
+        return None
+    try:
+        return get_runtime_view().bindings
+    except Exception:
+        return None
+
+
+def _format_http_binding_line(name: str, meta: Mapping[str, Any]) -> str:
+    methods = [str(m) for m in (meta.get("allowed_methods") or ()) if m is not None]
+    paths = [str(p) for p in (meta.get("allowed_paths") or ()) if p is not None]
+    cred = str(meta.get("credential_ref") or "")
+    methods_s = "、".join(methods)
+    paths_s = "、".join(paths)
+    ops = "；".join(part for part in (methods_s, paths_s) if part)
+    if ops:
+        return f"- {name}：{ops}；credential=<CREDENTIAL:{cred}>"
+    return f"- {name}：credential=<CREDENTIAL:{cred}>"
+
+
+def _http_binding_entry_lines(bindings: Mapping[str, Any]) -> list[str]:
+    lines: list[str] = []
+    for name in sorted(bindings):
+        meta = bindings[name]
+        if not isinstance(meta, Mapping):
+            continue
+        if meta.get("type") != "http":
+            continue
+        lines.append(_format_http_binding_line(name, meta))
+    return lines
+
+
+def build_http_tool_description() -> str:
+    bindings = _safe_runtime_bindings()
+    if bindings is None:
+        return TOOL_DESCRIPTION
+    return compose_binding_tool_description(
+        intro=_HTTP_INTRO,
+        outro=_HTTP_OUTRO,
+        entry_lines=_http_binding_entry_lines(bindings),
+    )
 
 
 def http_credential_request_schema() -> Dict[str, Any]:
     return {
         "name": HTTP_REFERENCE_TOOL,
-        "description": TOOL_DESCRIPTION,
+        "description": build_http_tool_description(),
         "parameters": {
             "type": "object",
             "properties": {
@@ -179,6 +295,9 @@ def handle_http_credential_request(args: Dict[str, Any], **context: Any) -> str:
     Requires a live APPROVAL_PENDING plan bound to this call identity. On success
     resolves one credential and runs the HTTP adapter once (fake transport in tests).
     """
+    raw_args = args if isinstance(args, dict) else {}
+    if is_redacted_credential_code(raw_args.get("credential")):
+        return credential_code_not_usable_error()
     try:
         validate_http_credential_request_args(args)
     except ValueError:
@@ -193,7 +312,7 @@ def handle_http_credential_request(args: Dict[str, Any], **context: Any) -> str:
         )
     return finalize_reference_execution(
         HTTP_REFERENCE_TOOL,
-        args if isinstance(args, dict) else {},
+        raw_args,
         session_id=str(context.get("session_id") or ""),
         turn_id=str(context.get("turn_id") or ""),
         tool_call_id=str(context.get("tool_call_id") or ""),
@@ -202,10 +321,13 @@ def handle_http_credential_request(args: Dict[str, Any], **context: Any) -> str:
 
 __all__ = [
     "ALLOWED_HTTP_METHODS",
+    "DESCRIPTION_CHAR_LIMIT",
     "HTTP_REFERENCE_TOOL",
     "TOOLSET_NAME",
     "TOOL_DESCRIPTION",
+    "build_http_tool_description",
     "check_http_credential_request_available",
+    "compose_binding_tool_description",
     "handle_http_credential_request",
     "http_credential_request_schema",
     "safe_inject_summary",

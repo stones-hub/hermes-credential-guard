@@ -242,7 +242,12 @@ def test_b3_stdout_echo_decoy_fail_closed(tmp_path: Path):
         assert "STATUS=0" in result.get("stdout", "")
         assert decoy not in str(result)
         assert decoy not in result.get("stdout", "")
-        assert "<CREDENTIAL:cli_token>" in result.get("stdout", "")
+        from credential_guard.models import make_token_id
+
+        assert f"<SECRET:{make_token_id('cli_token', 'value')}>" in result.get(
+            "stdout", ""
+        )
+        assert "<CREDENTIAL:cli_token>" not in result.get("stdout", "")
         assert result.get("error") != "PROCESS_OUTPUT_LEAK"
         assert "PROCESS_OUTPUT_LEAK" not in str(result)
         assert "***" not in result.get("stdout", "")
@@ -272,7 +277,10 @@ def test_b3_stdout_echo_mutation_process_output_leak_is_red(tmp_path: Path):
             result.get("ok") is False and result.get("error") == "PROCESS_OUTPUT_LEAK"
         )
         assert result["ok"] is True
-        assert "<CREDENTIAL:cli_token>" in result["stdout"]
+        from credential_guard.models import make_token_id
+
+        assert f"<SECRET:{make_token_id('cli_token', 'value')}>" in result["stdout"]
+        assert "<CREDENTIAL:cli_token>" not in result["stdout"]
     finally:
         cleanup_verified_executable(verified)
 

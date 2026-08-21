@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN_VERSION = "0.4.4"
+PLUGIN_VERSION = "0.4.5"
 WHEEL_NAME = f"hermes_credential_guard-{PLUGIN_VERSION}-py3-none-any.whl"
 SDIST_NAME = f"hermes_credential_guard-{PLUGIN_VERSION}.tar.gz"
 PLUGIN_ZIP_NAME = f"credential-guard-{PLUGIN_VERSION}-hermes-plugin.zip"
@@ -275,7 +275,22 @@ def _clean_src_copy(dest: Path, *, epoch: int) -> Path:
 
 
 def clean_prior_artifacts(out_dir: Path) -> None:
-    """Remove prior same-name / glob artifacts so glob cannot pick stale files."""
+    """Remove *this version's* prior artifacts so glob cannot pick stale files.
+
+    Deliberately version-scoped. An earlier revision globbed ``*.whl`` /
+    ``*.tar.gz`` / ``*-hermes-plugin.zip`` unconditionally, which silently
+    deleted every retained historical release artifact whenever ``out_dir`` was
+    the repository ``dist/`` (measured 2026-08-21: building 0.4.5 into a copy of
+    the repo took dist/ from 12 files to 7, destroying the nine git-tracked
+    0.4.2/0.4.3/0.4.4 artifacts that four gates hash-freeze). Previous releases
+    only survived because they were built into a temp dir and hand-copied.
+
+    Stale-file safety is preserved: the four current-version names are removed
+    explicitly, and any same-version leftovers (e.g. ``.tmp`` partials from an
+    interrupted normalize step) are swept by version-anchored patterns. Other
+    versions' artifacts are never touched — clearing them is a release decision,
+    not a build-step side effect.
+    """
     assert_no_build_tripwire("clean_prior_artifacts")
     out_dir.mkdir(parents=True, exist_ok=True)
     named = (WHEEL_NAME, SDIST_NAME, PLUGIN_ZIP_NAME, ARTIFACT_MANIFEST_NAME)
@@ -283,7 +298,14 @@ def clean_prior_artifacts(out_dir: Path) -> None:
         path = out_dir / name
         if path.is_file():
             path.unlink()
-    for pattern in ("*.whl", "*.tar.gz", "*-hermes-plugin.zip"):
+    # Version-anchored sweep: partial/renamed leftovers for THIS version only.
+    version_patterns = (
+        f"hermes_credential_guard-{PLUGIN_VERSION}-*.whl",
+        f"hermes_credential_guard-{PLUGIN_VERSION}.tar.gz*",
+        f"credential-guard-{PLUGIN_VERSION}-hermes-plugin.zip*",
+        f"artifact-manifest-{PLUGIN_VERSION}.json*",
+    )
+    for pattern in version_patterns:
         for path in out_dir.glob(pattern):
             if path.is_file():
                 path.unlink()

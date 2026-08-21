@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 from credential_guard.hooks import on_transform_tool_result
 from credential_guard.middleware import on_llm_execution
+from credential_guard.runtime_config import reset_runtime_for_tests
 from credential_guard.sensitive_paths import contains_private_key_material
 
 
@@ -106,7 +108,9 @@ def test_urlsafe_distinct_synthetic_pem_b64_diverges():
     # Do not print pem/url bodies.
 
 
-def test_probe_urlsafe_pem_provider_bound_live_source_whole_field_replace():
+def test_probe_urlsafe_pem_provider_bound_live_source_whole_field_replace(
+    tmp_path, monkeypatch
+):
     """Live source: urlsafe PEM is detected, whole-field replaced, Provider=1.
 
     Historical ZIP canary evaluator still requires provider_call_count==0 against
@@ -115,6 +119,21 @@ def test_probe_urlsafe_pem_provider_bound_live_source_whole_field_replace():
     """
     from credential_guard.middleware import REDACTED_UNRESOLVED_SENSITIVE_FIELD
     from credential_guard.result_guard import RESULT_GUARD_FAIL_TEXT
+
+    hermes = tmp_path / "hermes_home"
+    store = hermes / "credential-guard"
+    store.mkdir(parents=True)
+    os.chmod(store, 0o700)
+    cfg = store / "credential-guard.json"
+    cfg.write_text(
+        json.dumps({"version": 2, "credentials": {}, "bindings": {}}),
+        encoding="utf-8",
+    )
+    os.chmod(cfg, 0o600)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HERMES_HOME", str(hermes))
+    (tmp_path / "home").mkdir(exist_ok=True)
+    reset_runtime_for_tests()
 
     mod = _load()
     _pem, _std, url = mod.urlsafe_distinct_synthetic_pem_b64()
@@ -142,6 +161,7 @@ def test_probe_urlsafe_pem_provider_bound_live_source_whole_field_replace():
     assert live_tool == RESULT_GUARD_FAIL_TEXT
     assert "BEGIN" not in live_tool
     assert live_tool.count(url) == 0
+    reset_runtime_for_tests()
 
 
 def test_prove_installed_module_path_requires_plugin_not_source(tmp_path):

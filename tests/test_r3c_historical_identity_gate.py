@@ -823,6 +823,88 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         "scripts/run_r10_044_final_zip_tests.py",
         # scripts/run_final_zip_encoding_canary.py is baseline-era (modified only);
         # it stays out of this delta and is declared in R5_MODIFIED_PATHS.
+        # R11 / 0.4.5 batch 1 (C1 + C2). Non-dist additions only; the four
+        # touched production modules are baseline-era (modified only) and stay
+        # out of this delta, declared in R5_MODIFIED_PATHS.
+        "docs/R11-0.4.5-开箱可用性与保护边界透明化-方案.md",
+        ".c1c2-usability-task.md",
+        ".cg-known-test-baseline.md",
+        "tests/test_c1c2_zero_config_usability.py",
+        # R11 / 0.4.5 batch 1, round 6: rounds 4 and 5 patched two symptoms of
+        # one root cause -- the plugin GUESSED its store from $HERMES_HOME and
+        # read every failed lookup as "never configured". Round 6 removed the
+        # guess (the store is derived from the install location) and withdrew
+        # the pass-through, so both round 4/5 regression modules were deleted
+        # rather than carried: they assert the retired premise.
+        "tests/test_r6_store_location_derived.py",
+        # Round 7: the suite itself pointed the store at the operator's live
+        # profile via an inherited HERMES_HOME, and search_path_is_protected
+        # crashed when the store root was underivable. Both pinned below.
+        "tests/test_r7_harness_profile_isolation.py",
+        "tests/test_r7_search_guard_underivable_root.py",
+        # Round 8: non-blocking gaps found by the second read-only review,
+        # recorded for the next version instead of fixed (user decision).
+        "docs/R11-0.4.5-遗留待办.md",
+        # R11 / 0.4.5 batch 1, round 2 (narrow fix task brief).
+        ".c1c2-round2-narrow-fix-task.md",
+        # R11 / 0.4.5 batch 1, round 3 (closeout task brief).
+        ".c1c2-round3-closeout-task.md",
+        # R11 / 0.4.5 batch 2 (C5 tool description binding list).
+        ".c5c7-usability-task.md",
+        ".c5-slice-task.md",
+        ".c5-round2-task.md",
+        ".c5-round3-task.md",
+        "tests/test_c5c7_usability.py",
+        # R11 / 0.4.5 batch 2, C6 (redacted credential-code misuse error).
+        ".c6-task.md",
+        "credential_guard/credential_code.py",
+        # R11 / 0.4.5 batch 2, C6 fixture closeout task brief (later delta).
+        ".c6-plugin-fixture-closeout-task.md",
+        # R11 / 0.4.5 batch 2, C6 fixture gate-register task brief (later delta).
+        ".c6-fixture-gate-register-task.md",
+        # R11 / 0.4.5 batch 2, C7 (unregistered credential local risk warning).
+        ".c7-task.md",
+        "credential_guard/unregistered_warning.py",
+        # R11 / 0.4.5 batch 1, round 6: the single source of truth for the
+        # store location (derived from the install layout, never guessed from
+        # $HERMES_HOME) plus the suite-wide bridge that lets the existing
+        # HERMES_HOME-based fixtures keep pinning a temporary store.
+        "credential_guard/store_location.py",
+        "tests/conftest.py",
+        # R11 / 0.4.5 batch 1, round 6: C1 pass-through withdrawal regression.
+        "tests/test_r6_unconfigured_blocks.py",
+        # R11 / 0.4.5 batch 2, C7 empty-session LRU narrow-fix task brief (later delta).
+        ".c7-empty-session-lru-fix-task.md",
+        # R11 / 0.4.5 batch 2, C7 LRU gate-register task brief (later delta).
+        ".c7-lru-gate-register-task.md",
+        # R11 / 0.4.5 C5 architecture: safe target catalog sidecar.
+        "credential_guard/target_catalog.py",
+        "tests/test_c5_target_catalog.py",
+        # R11 / 0.4.5 fail-closed local events (async lastResort-safe).
+        "credential_guard/local_events.py",
+        # R11 / 0.4.5 batch 3, C8 (dead RUNTIME_ADAPTER_NOT_READY removal).
+        "tests/test_c8_dead_error_codes.py",
+        # R11 / 0.4.5 batch 3, C9 (conservative placeholder unification).
+        "tests/test_c9_placeholder_unification.py",
+        # R11 / 0.4.5 batch 3, C10 (offline validate CLI).
+        "tests/test_cli_validate.py",
+        # R11 / 0.4.5 version contract + final-ZIP harness. dist/ members stay
+        # out of this enumerator (_SKIP_DIRS includes dist), so the landed 0.4.5
+        # four-file set does NOT appear here; their bytes are pinned by
+        # tests/test_r11_045_release_contract.py and classified in the topology
+        # gate's R5_ADDED_PATHS instead.
+        "docs/R11-0.4.5-验收报告.md",
+        "docs/R11-0.4.5-Release-Notes.md",
+        "tests/test_r11_045_release_contract.py",
+        "tests/r11_045_final_zip_e2e.py",
+        "scripts/run_r11_045_final_zip_e2e.py",
+        "scripts/run_r11_045_final_zip_tests.py",
+        # R11 / 0.4.5 freeze sidecar. Declared BEFORE it is written: the sidecar
+        # excludes itself when computing the digest it records (same self-
+        # reference discipline as .r5-/.r6-freeze-evidence.sha256), but it is a
+        # live workspace file and must be classified here or FINAL topology
+        # accounting goes off by one.
+        ".r11-freeze-evidence.sha256",
     }
 )
 

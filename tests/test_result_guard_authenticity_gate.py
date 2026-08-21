@@ -85,6 +85,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 token = os.environ["CG_DECOY"]
+import hashlib as _hashlib
+# C9: same registry token llm_request / tool-result emit for credentials.api / value.
+_api_secret_token = (
+    "<SECRET:cg_"
+    + _hashlib.sha256(("api" + chr(0) + "value").encode("utf-8")).hexdigest()[:16]
+    + ">"
+)
 hermes_home = Path(os.environ["HERMES_HOME"])
 home = Path(os.environ["HOME"])
 plugin_src = Path(os.environ["CG_PLUGIN_SRC"])
@@ -372,6 +379,7 @@ def gate(tool_name, reason, **kwargs):
     return {"approved": False, "message": "DENIED: r4-auth-unexpected-approval"}
 
 sys.setprofile(_profile)
+threading.setprofile(_profile)
 try:
     with patch("tools.approval.request_tool_approval", side_effect=gate):
         agent = AIAgent(
@@ -390,6 +398,7 @@ try:
         agent.run_conversation("Please read the prepared payload files once each.")
 finally:
     sys.setprofile(None)
+    threading.setprofile(None)
 
 _stop.set()
 try:
@@ -422,7 +431,7 @@ print(json.dumps({
     "auth_residue": int(provider_blob.count(full_jwt)),
     "pem_residue": int(provider_blob.count("BEGIN PRIVATE KEY")),
     "field_residue": int(provider_blob.count("cg_r4_unknown_password_value_99")),
-    "credential_placeholder_count": int(provider_blob.count("<CREDENTIAL:api>")),
+    "credential_placeholder_count": int(provider_blob.count(_api_secret_token)),
     "redacted_secret_count": int(provider_blob.count("<REDACTED_SECRET>")),
     "callback_under_plugin": callback_under_plugin,
     "hooks_under_plugin": hooks_under_plugin,

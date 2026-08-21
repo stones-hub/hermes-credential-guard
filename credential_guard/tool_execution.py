@@ -31,7 +31,20 @@ from .tool_request import (
     reference_path_blocked,
 )
 
-RUNTIME_ADAPTER_NOT_READY = "RUNTIME_ADAPTER_NOT_READY"
+# Stage-accurate fixed codes. Never claim adapters are unimplemented.
+REFERENCE_PATH_BLOCKED = "REFERENCE_PATH_BLOCKED"
+CALL_IDENTITY_REQUIRED = "CALL_IDENTITY_REQUIRED"
+PLAN_NOT_FOUND = "PLAN_NOT_FOUND"
+PLAN_NOT_PENDING = "PLAN_NOT_PENDING"
+PLAN_RECHECK_FAILED = "PLAN_RECHECK_FAILED"
+PLAN_ARGS_INVALID = "PLAN_ARGS_INVALID"
+PLAN_CONSUME_FAILED = "PLAN_CONSUME_FAILED"
+RUNTIME_CONFIG_UNAVAILABLE = "RUNTIME_CONFIG_UNAVAILABLE"
+CONFIG_LOCK_UNAVAILABLE = "CONFIG_LOCK_UNAVAILABLE"
+EXECUTION_FAILED = "EXECUTION_FAILED"
+ADAPTER_FAILED = "ADAPTER_FAILED"
+HTTP_ADAPTER_FAILED = "HTTP_ADAPTER_FAILED"
+PROCESS_ADAPTER_FAILED = "PROCESS_ADAPTER_FAILED"
 
 # Bound by on_tool_execution around next_call so the formal handler can recover
 # session/turn/tool_call identity even when registry.dispatch omits them.
@@ -82,12 +95,27 @@ def _shared_config_lock_for_execution() -> Iterator[None]:
         yield
 
 
-def _safe_error(code: str = RUNTIME_ADAPTER_NOT_READY) -> str:
+def _safe_error(code: str) -> str:
+    """Fixed error payload. ``code`` is required — no lying default."""
     return json.dumps(
         {"ok": False, "error": code, "source": "credential-guard"},
         separators=(",", ":"),
         sort_keys=True,
     )
+
+
+def _plan_store_code(exc: BaseException, fallback: str) -> str:
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and code and code.isascii() and " " not in code:
+        return code
+    return fallback
+
+
+def _config_lock_code(exc: BaseException) -> str:
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and code and code.isascii() and " " not in code:
+        return code
+    return CONFIG_LOCK_UNAVAILABLE
 
 
 def _has_reference(args: Dict[str, Any], registered) -> bool:
@@ -169,16 +197,16 @@ def finalize_reference_execution(
         if get_invalid_marker(session_id, tool_call_id) or reference_path_blocked(
             session_id, tool_call_id
         ):
-            return _safe_error()
+            return _safe_error(REFERENCE_PATH_BLOCKED)
 
         if not session_id or not turn_id or not tool_call_id or not tool_name:
-            return _safe_error()
+            return _safe_error(CALL_IDENTITY_REQUIRED)
 
         store = get_plan_store()
         try:
             plan = store.lookup(session_id, tool_call_id)
-        except PlanStoreError:
-            return _safe_error()
+        except PlanStoreError as exc:
+            return _safe_error(_plan_store_code(exc, PLAN_NOT_FOUND))
 
         if plan is None or plan.state is not PlanState.APPROVAL_PENDING:
             if plan is not None and plan.state not in (
@@ -189,7 +217,7 @@ def finalize_reference_execution(
                     store.invalidate(session_id, tool_call_id)
                 except PlanStoreError:
                     pass
-            return _safe_error()
+            return _safe_error(PLAN_NOT_PENDING)
 
         # Explicit kwargs that disagree with the bound call identity are theft.
         id_conflicts = [
@@ -209,7 +237,7 @@ def finalize_reference_execution(
                             store.invalidate(session_id, tool_call_id)
                         except PlanStoreError:
                             pass
-                        return _safe_error()
+                        return _safe_error(RUNTIME_CONFIG_UNAVAILABLE)
 
                     try:
                         id1 = dict(runtime_config.get_current_config_file_identity())
@@ -218,7 +246,7 @@ def finalize_reference_execution(
                             store.invalidate(session_id, tool_call_id)
                         except PlanStoreError:
                             pass
-                        return _safe_error()
+                        return _safe_error(RUNTIME_CONFIG_UNAVAILABLE)
 
                     try:
                         args_digest = canonical_args_digest(payload)
@@ -227,7 +255,7 @@ def finalize_reference_execution(
                             store.invalidate(session_id, tool_call_id)
                         except PlanStoreError:
                             pass
-                        return _safe_error()
+                        return _safe_error(PLAN_ARGS_INVALID)
 
                     mismatches = [
                         *id_conflicts,
@@ -267,7 +295,7 @@ def finalize_reference_execution(
                             store.invalidate(session_id, tool_call_id)
                         except PlanStoreError:
                             pass
-                        return _safe_error()
+                        return _safe_error(PLAN_RECHECK_FAILED)
 
                     try:
                         id2 = dict(runtime_config.get_current_config_file_identity())
@@ -276,42 +304,42 @@ def finalize_reference_execution(
                             store.invalidate(session_id, tool_call_id)
                         except PlanStoreError:
                             pass
-                        return _safe_error()
+                        return _safe_error(RUNTIME_CONFIG_UNAVAILABLE)
 
                     if id2 != id1 or not _identities_aligned(plan, view, id2):
                         try:
                             store.invalidate(session_id, tool_call_id)
                         except PlanStoreError:
                             pass
-                        return _safe_error()
+                        return _safe_error(PLAN_RECHECK_FAILED)
 
                     try:
                         store.consume(session_id, tool_call_id)
-                    except PlanStoreError:
-                        return _safe_error()
+                    except PlanStoreError as exc:
+                        return _safe_error(_plan_store_code(exc, PLAN_CONSUME_FAILED))
 
                     try:
                         consumed = store.lookup(session_id, tool_call_id)
-                    except PlanStoreError:
-                        return _safe_error()
+                    except PlanStoreError as exc:
+                        return _safe_error(_plan_store_code(exc, PLAN_CONSUME_FAILED))
                     if consumed is None or consumed.state is not PlanState.CONSUMED:
-                        return _safe_error()
+                        return _safe_error(PLAN_CONSUME_FAILED)
 
                     # R3: resolve_one → adapter dispatch by verified binding type.
                     return _resolve_and_execute(consumed, view, payload)
-        except ConfigLockError:
+        except ConfigLockError as exc:
             try:
                 store.invalidate(session_id, tool_call_id)
             except PlanStoreError:
                 pass
-            return _safe_error()
+            return _safe_error(_config_lock_code(exc))
     except Exception:
         try:
             if session_id and tool_call_id:
                 get_plan_store().invalidate(session_id, tool_call_id)
         except Exception:
             pass
-        return _safe_error()
+        return _safe_error(EXECUTION_FAILED)
 
 
 def _resolve_and_execute(consumed, view, payload: Dict[str, Any]) -> str:
@@ -319,16 +347,16 @@ def _resolve_and_execute(consumed, view, payload: Dict[str, Any]) -> str:
     canonical = view.to_canonical_dict()
     bindings = canonical.get("bindings")
     if not isinstance(bindings, dict):
-        return _safe_error("ADAPTER_FAILED")
+        return _safe_error(ADAPTER_FAILED)
     binding = bindings.get(consumed.binding_name)
     if not isinstance(binding, dict):
-        return _safe_error("ADAPTER_FAILED")
+        return _safe_error(ADAPTER_FAILED)
     btype = binding.get("type")
     if btype == "http":
         return _resolve_and_execute_http(consumed, view, payload, binding)
     if btype in {"process_env", "stdin"}:
         return _resolve_and_execute_process(consumed, view, payload, binding)
-    return _safe_error("ADAPTER_FAILED")
+    return _safe_error(ADAPTER_FAILED)
 
 
 def _resolve_and_execute_http(consumed, view, payload: Dict[str, Any], binding: Dict[str, Any]) -> str:
@@ -342,7 +370,7 @@ def _resolve_and_execute_http(consumed, view, payload: Dict[str, Any], binding: 
         method = payload.get("method")
         path = payload.get("path")
         if not isinstance(method, str) or not isinstance(path, str):
-            return _safe_error("HTTP_ADAPTER_FAILED")
+            return _safe_error(HTTP_ADAPTER_FAILED)
         with _http_observe_lock:
             transport = _http_transport_override
         _note_http_adapter_invoke()
@@ -354,12 +382,12 @@ def _resolve_and_execute_http(consumed, view, payload: Dict[str, Any], binding: 
             transport=transport,
         )
         if not isinstance(result, dict):
-            return _safe_error("HTTP_ADAPTER_FAILED")
+            return _safe_error(HTTP_ADAPTER_FAILED)
         return json.dumps(result, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
     except InjectionError:
-        return _safe_error("HTTP_ADAPTER_FAILED")
+        return _safe_error(HTTP_ADAPTER_FAILED)
     except Exception:
-        return _safe_error("HTTP_ADAPTER_FAILED")
+        return _safe_error(HTTP_ADAPTER_FAILED)
     finally:
         if lease is not None:
             try:
@@ -389,7 +417,7 @@ def _resolve_and_execute_process(
     try:
         expected_raw = dict(consumed.program_identity or {})
         if not expected_raw:
-            return _safe_error("PROCESS_ADAPTER_FAILED")
+            return _safe_error(PROCESS_ADAPTER_FAILED)
         try:
             expected = ProgramIdentity(
                 device=int(expected_raw["device"]),
@@ -401,11 +429,11 @@ def _resolve_and_execute_process(
                 content_sha256=str(expected_raw["content_sha256"]),
             )
         except Exception:
-            return _safe_error("PROCESS_ADAPTER_FAILED")
+            return _safe_error(PROCESS_ADAPTER_FAILED)
 
         program = binding.get("program")
         if not isinstance(program, str) or not program:
-            return _safe_error("PROCESS_ADAPTER_FAILED")
+            return _safe_error(PROCESS_ADAPTER_FAILED)
 
         # Recheck inside the already-held config + execution locks.
         verify_same_identity(program, expected)
@@ -416,14 +444,14 @@ def _resolve_and_execute_process(
         lease = resolve_one_for_execution(consumed, view)
         result = execute_process(binding=binding, lease=lease, verified=verified)
         if not isinstance(result, dict):
-            return _safe_error("PROCESS_ADAPTER_FAILED")
+            return _safe_error(PROCESS_ADAPTER_FAILED)
         return json.dumps(result, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
     except ProgramIdentityError:
-        return _safe_error("PROCESS_ADAPTER_FAILED")
+        return _safe_error(PROCESS_ADAPTER_FAILED)
     except InjectionError:
-        return _safe_error("PROCESS_ADAPTER_FAILED")
+        return _safe_error(PROCESS_ADAPTER_FAILED)
     except Exception:
-        return _safe_error("PROCESS_ADAPTER_FAILED")
+        return _safe_error(PROCESS_ADAPTER_FAILED)
     finally:
         if lease is not None:
             try:
@@ -492,20 +520,20 @@ def on_tool_execution(
             session_id, tool_call_id
         ):
             consume_invalid_marker(session_id, tool_call_id)
-            return _safe_error()
+            return _safe_error(REFERENCE_PATH_BLOCKED)
 
         # Reference / plan path — require full call identity.
         if not session_id or not turn_id or not tool_call_id:
             _invalidate_if_live(session_id, tool_call_id)
-            return _safe_error()
+            return _safe_error(CALL_IDENTITY_REQUIRED)
 
         if plan is None:
-            return _safe_error()
+            return _safe_error(PLAN_NOT_FOUND)
 
         # Live plans must reach host next_call (approval and/or formal handler).
         # Never consume here; never invalidate ANALYZED/PENDING before next_call.
         if plan.state not in (PlanState.ANALYZED, PlanState.APPROVAL_PENDING):
-            return _safe_error()
+            return _safe_error(PLAN_NOT_PENDING)
 
         token = bind_execution_context(
             tool_name=tool_name,
@@ -517,7 +545,7 @@ def on_tool_execution(
             result = next_call(payload)
         except Exception:
             _invalidate_if_live(session_id, tool_call_id)
-            return _safe_error()
+            return _safe_error(EXECUTION_FAILED)
         finally:
             reset_execution_context(token)
 
@@ -535,11 +563,23 @@ def on_tool_execution(
                 get_plan_store().invalidate(session_id, tool_call_id)
         except Exception:
             pass
-        return _safe_error()
+        return _safe_error(EXECUTION_FAILED)
 
 
 __all__ = [
-    "RUNTIME_ADAPTER_NOT_READY",
+    "ADAPTER_FAILED",
+    "CALL_IDENTITY_REQUIRED",
+    "CONFIG_LOCK_UNAVAILABLE",
+    "EXECUTION_FAILED",
+    "HTTP_ADAPTER_FAILED",
+    "PLAN_ARGS_INVALID",
+    "PLAN_CONSUME_FAILED",
+    "PLAN_NOT_FOUND",
+    "PLAN_NOT_PENDING",
+    "PLAN_RECHECK_FAILED",
+    "PROCESS_ADAPTER_FAILED",
+    "REFERENCE_PATH_BLOCKED",
+    "RUNTIME_CONFIG_UNAVAILABLE",
     "bind_execution_context",
     "finalize_reference_execution",
     "get_bound_execution_context",

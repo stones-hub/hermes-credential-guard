@@ -1,9 +1,16 @@
-"""R1A: prove new config/migration modules never touch real Hermes profiles."""
+"""R1A: prove the config modules never touch real Hermes profiles.
+
+Round 6 deleted ``credential_guard/migration.py`` (the v1 dual-file migrator) along
+with the retired ``HERMES_HOME`` guess it carried. This file kept two tests that
+asserted *that* resolver's behaviour; the property they defended -- "resolving our
+own config directory must never silently target a real worker/default profile" --
+still matters, so they now run against ``store_location``, which is where the
+resolution actually lives. Everything else here is unchanged.
+"""
 
 from __future__ import annotations
 
 import ast
-import inspect
 import os
 import subprocess
 from pathlib import Path
@@ -12,16 +19,20 @@ import pytest
 
 import credential_guard.bindings as bindings_mod
 import credential_guard.config as config_mod
-import credential_guard.migration as migration_mod
+import credential_guard.store_location as store_location_mod
 from credential_guard.config import CONFIG_FILENAME, CredentialGuardConfig
-from credential_guard.migration import migrate_config, resolve_config_dir
+from credential_guard.store_location import (
+    StoreLocationError,
+    resolve_store_dir,
+    use_store_dir,
+)
 
 
 REPO = Path(__file__).resolve().parents[1]
 NEW_MODULES = (
     REPO / "credential_guard" / "config.py",
     REPO / "credential_guard" / "bindings.py",
-    REPO / "credential_guard" / "migration.py",
+    REPO / "credential_guard" / "store_location.py",
 )
 
 FORBIDDEN_LITERALS = (
@@ -44,19 +55,33 @@ def test_new_modules_have_no_hardcoded_real_profile_paths():
                     assert lit not in node.value
 
 
-def test_monkeypatch_home_and_hermes_home(
+@pytest.mark.no_store_bridge
+def test_resolution_never_targets_a_real_profile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    """Formerly test_monkeypatch_home_and_hermes_home.
+
+    It used to assert the store landed at ``$HERMES_HOME/credential-guard``. Round 6
+    stopped reading that variable, so the assertion now covers what it was actually
+    defending: whatever the environment says, resolution must stay inside the test's
+    temporary tree and must never name a real profile.
+    """
     home = tmp_path / "home"
     hermes = tmp_path / "hermes"
     home.mkdir()
     hermes.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("HERMES_HOME", str(hermes))
-    resolved = resolve_config_dir()
-    assert resolved == hermes / "credential-guard"
-    assert str(tmp_path) in str(resolved)
-    assert "profiles/worker" not in str(resolved)
+
+    store = tmp_path / "profiles" / "scratch" / "credential-guard"
+    use_store_dir(store)
+    try:
+        resolved = resolve_store_dir()
+        assert str(tmp_path) in str(resolved)
+        assert "profiles/worker" not in str(resolved)
+        assert "profiles/default" not in str(resolved)
+    finally:
+        use_store_dir(None)
 
 
 def test_no_subprocess_hermes_profile_invocation_in_new_modules():
@@ -87,30 +112,30 @@ def test_no_subprocess_hermes_profile_invocation_in_new_modules():
                             assert "-p default" not in joined
 
 
-def test_production_api_requires_explicit_dir_or_temp_hermes_home(
+@pytest.mark.no_store_bridge
+def test_unresolvable_root_fails_closed_instead_of_guessing_a_profile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    # Explicit directory wins.
-    explicit = tmp_path / "explicit-store"
-    explicit.mkdir()
-    assert resolve_config_dir(explicit) == explicit.resolve()
+    """Formerly test_production_api_requires_explicit_dir_or_temp_hermes_home.
 
+    The retired resolver fell back to ``$HOME/.hermes/credential-guard`` when it could
+    not tell where it was, and the old assertion pinned that fallback. Round 6 made the
+    same situation fail closed, which satisfies the original intent more strictly: with
+    nothing to derive from, no path is produced at all, so no real profile can be hit.
+    """
     home = tmp_path / "home"
-    hermes = tmp_path / "hermes-home"
     home.mkdir()
-    hermes.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("HERMES_HOME", str(hermes))
-    assert resolve_config_dir(None) == (hermes / "credential-guard").resolve()
-
-    # Without HERMES_HOME, must not silently target a real worker profile.
     monkeypatch.delenv("HERMES_HOME", raising=False)
-    monkeypatch.setenv("HOME", str(home))
-    resolved = resolve_config_dir(None)
-    assert "profiles/worker" not in str(resolved)
-    assert "profiles/default" not in str(resolved)
-    # Falls back to temporary HOME/.hermes/credential-guard — still under tmp.
-    assert str(home) in str(resolved)
+    use_store_dir(None)
+
+    def _no_root(package_dir):
+        raise StoreLocationError("STORE_ROOT_NOT_DERIVABLE")
+
+    monkeypatch.setattr(store_location_mod, "_profile_root_from", _no_root)
+
+    with pytest.raises(StoreLocationError):
+        resolve_store_dir()
 
 
 def test_dynamic_load_uses_only_tmp_paths(
@@ -153,27 +178,17 @@ def test_dynamic_load_uses_only_tmp_paths(
             pytest.fail("must not open real worker config.yaml")
 
 
-def test_migrate_config_signature_accepts_explicit_dir():
-    sig = inspect.signature(migrate_config)
-    params = list(sig.parameters)
-    assert params, "migrate_config must accept an explicit config directory"
-    # First positional parameter is the store/config directory.
-    assert params[0] in {"store_dir", "config_dir", "path", "directory"}
-
-
 def test_modules_export_expected_symbols():
     assert hasattr(config_mod, "CredentialGuardConfig")
     assert hasattr(config_mod, "ConfigError")
     assert hasattr(bindings_mod, "ALLOWED_BINDING_TYPES") or hasattr(
         bindings_mod, "validate_binding"
     )
-    assert hasattr(migration_mod, "migrate_config")
-    assert hasattr(migration_mod, "resolve_config_dir")
+    assert hasattr(store_location_mod, "resolve_store_dir")
+    assert hasattr(store_location_mod, "StoreLocationError")
 
 
-def test_load_and_migrate_reject_insecure_parent_without_path_leak(
-    tmp_path: Path,
-):
+def test_load_rejects_insecure_parent_without_path_leak(tmp_path: Path):
     """Boundary: store parent/dir mode gates must not leak absolute paths."""
     decoy = "CG_BOUND_" + "a" * 24
     store = tmp_path / "credential-guard"
@@ -193,21 +208,3 @@ def test_load_and_migrate_reject_insecure_parent_without_path_leak(
     assert str(store) not in blob
     assert decoy not in blob
     assert getattr(ei_load.value, "__context__", "missing") is None
-
-    # Migrate also requires secure store directory.
-    from credential_guard.migration import MigrationError
-
-    (store / "credentials.json").write_text(
-        '{"version":1,"credentials":{}}', encoding="utf-8"
-    )
-    (store / "targets.json").write_text(
-        '{"version":1,"targets":{}}', encoding="utf-8"
-    )
-    os.chmod(store / "credentials.json", 0o600)
-    os.chmod(store / "targets.json", 0o600)
-    with pytest.raises(MigrationError) as ei_mig:
-        migrate_config(store)
-    blob2 = f"{ei_mig.value!s}{ei_mig.value!r}"
-    assert str(store) not in blob2
-    assert ei_mig.value.__context__ is None
-    assert ei_mig.value.__cause__ is None

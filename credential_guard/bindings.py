@@ -152,9 +152,11 @@ _BASIC_FIELDS = frozenset({"type", "location"})
 _API_KEY_FIELDS = frozenset({"type", "header_name"})
 _STDIN_FORMATS = frozenset({"raw", "line"})
 
-_ALLOWED_HTTP_METHODS = frozenset(
+ALLOWED_HTTP_METHODS = frozenset(
     {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 )
+_ALLOWED_HTTP_METHODS = ALLOWED_HTTP_METHODS  # backward-compatible alias
+MAX_ALLOWED_HTTP_PATHS = 64
 _UNSAFE_PATH_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f\\\u0085\u2028\u2029]")
 _CTRL_OR_NUL = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -306,45 +308,65 @@ def validate_binding(
     entry: Mapping[str, Any],
     credentials: Mapping[str, Mapping[str, Any]],
 ) -> Dict[str, Any]:
-    from .config import ConfigError
+    from .config import ConfigError, safe_diag_location
 
+    base = safe_diag_location("bindings", name)
     if not isinstance(entry, dict):
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=base)
     btype = entry.get("type")
     if btype not in ALLOWED_BINDING_TYPES:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location("bindings", name, "type"),
+        )
     if btype == "http":
-        return _validate_http(name, entry, credentials)
+        return _validate_http(name, entry, credentials, base=base)
     if btype == "process_env":
-        return _validate_process_env(name, entry, credentials)
+        return _validate_process_env(name, entry, credentials, base=base)
     if btype == "stdin":
-        return _validate_stdin(name, entry, credentials)
-    raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        return _validate_stdin(name, entry, credentials, base=base)
+    raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=base)
 
 
-def _require_fields(entry: Mapping[str, Any], allowed: frozenset) -> None:
-    from .config import ConfigError
+def _require_fields(
+    entry: Mapping[str, Any], allowed: frozenset, *, base: str
+) -> None:
+    from .config import ConfigError, safe_diag_location
 
-    if set(entry) - allowed:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
-    if allowed - set(entry):
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+    unknown = set(entry) - allowed
+    missing = allowed - set(entry)
+    if unknown:
+        # Unknown field names are not whitelist segments — locate the object only.
+        raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=base)
+    if missing:
+        field = sorted(missing)[0]
+        loc = safe_diag_location(*(base.split(".") + [field]))
+        raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=loc)
 
 
-def _require_approval(entry: Mapping[str, Any]) -> None:
-    from .config import ConfigError
+def _require_approval(entry: Mapping[str, Any], *, base: str) -> None:
+    from .config import ConfigError, safe_diag_location
 
     if entry.get("approval") != "required":
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["approval"])),
+        )
 
 
 def _resolve_cred(
-    ref: Any, credentials: Mapping[str, Mapping[str, Any]]
+    ref: Any, credentials: Mapping[str, Mapping[str, Any]], *, base: str
 ) -> Mapping[str, Any]:
-    from .config import ConfigError
+    from .config import ConfigError, safe_diag_location
 
     if not isinstance(ref, str) or ref not in credentials:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["credential_ref"])),
+        )
     return credentials[ref]
 
 
@@ -379,40 +401,87 @@ def _validate_int_in_range(value: Any, lo: int, hi: int) -> int:
     return value
 
 
-def _validate_http_request(request: Any) -> Dict[str, Any]:
-    from .config import ConfigError
+def _validate_http_request(request: Any, *, base: str) -> Dict[str, Any]:
+    from .config import ConfigError, safe_diag_location
 
+    req_base = safe_diag_location(*(base.split(".") + ["request"]))
     if not isinstance(request, dict):
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=req_base)
     unknown = set(request) - _REQUEST_FIELDS
     missing = _REQUEST_REQUIRED_FIELDS - set(request)
-    if unknown or missing:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+    if unknown:
+        raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=req_base)
+    if missing:
+        field = sorted(missing)[0]
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(req_base.split(".") + [field])),
+        )
 
     methods_raw = request["allowed_methods"]
     if not isinstance(methods_raw, list) or not methods_raw:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(req_base.split(".") + ["allowed_methods"])),
+        )
     methods: list[str] = []
     seen_m: set[str] = set()
     for item in methods_raw:
         if not isinstance(item, str) or item not in _ALLOWED_HTTP_METHODS:
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(
+                    *(req_base.split(".") + ["allowed_methods"])
+                ),
+            )
         if item in seen_m:
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(
+                    *(req_base.split(".") + ["allowed_methods"])
+                ),
+            )
         seen_m.add(item)
         methods.append(item)
 
     paths_raw = request["allowed_paths"]
     if not isinstance(paths_raw, list) or not paths_raw:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
-    if len(paths_raw) > 64:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(req_base.split(".") + ["allowed_paths"])),
+        )
+    if len(paths_raw) > MAX_ALLOWED_HTTP_PATHS:
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(req_base.split(".") + ["allowed_paths"])),
+        )
     paths: list[str] = []
     seen_p: set[str] = set()
     for item in paths_raw:
-        path = validate_exact_http_path(item)
+        try:
+            path = validate_exact_http_path(item)
+        except ConfigError:
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(
+                    *(req_base.split(".") + ["allowed_paths"])
+                ),
+            ) from None
         if path in seen_p:
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(
+                    *(req_base.split(".") + ["allowed_paths"])
+                ),
+            )
         seen_p.add(path)
         paths.append(path)
 
@@ -427,7 +496,7 @@ def _validate_http_request(request: Any) -> Dict[str, Any]:
         else _DEFAULT_TOTAL_TIMEOUT
     )
     if total < connect:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=req_base)
     max_body = (
         _validate_int_in_range(request["max_response_body_bytes"], 256, 8_388_608)
         if "max_response_body_bytes" in request
@@ -446,50 +515,106 @@ def _validate_http(
     name: str,
     entry: Mapping[str, Any],
     credentials: Mapping[str, Mapping[str, Any]],
+    *,
+    base: str,
 ) -> Dict[str, Any]:
-    from .config import ConfigError
+    from .config import ConfigError, safe_diag_location
 
-    _require_fields(entry, _HTTP_FIELDS)
-    _require_approval(entry)
-    cred = _resolve_cred(entry["credential_ref"], credentials)
+    _require_fields(entry, _HTTP_FIELDS, base=base)
+    _require_approval(entry, base=base)
+    cred = _resolve_cred(entry["credential_ref"], credentials, base=base)
     target = entry["target"]
+    target_base = safe_diag_location(*(base.split(".") + ["target"]))
     if not isinstance(target, dict):
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
-    _require_fields(target, _TARGET_FIELDS)
+        raise ConfigError(
+            "CONFIG_SCHEMA", "invalid configuration", location=target_base
+        )
+    _require_fields(target, _TARGET_FIELDS, base=target_base)
     scheme = target["scheme"]
     if not isinstance(scheme, str) or scheme not in _ALLOWED_HTTP_SCHEMES:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
-    host = validate_dns_host(target["host"])
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(target_base.split(".") + ["scheme"])),
+        )
+    try:
+        host = validate_dns_host(target["host"])
+    except ConfigError:
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(target_base.split(".") + ["host"])),
+        ) from None
     port = target["port"]
     if not isinstance(port, int) or isinstance(port, bool) or not (1 <= port <= 65535):
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
-    request_out = _validate_http_request(entry["request"])
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(target_base.split(".") + ["port"])),
+        )
+    request_out = _validate_http_request(entry["request"], base=base)
     inject = entry["inject"]
+    inject_base = safe_diag_location(*(base.split(".") + ["inject"]))
     if not isinstance(inject, dict):
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError(
+            "CONFIG_SCHEMA", "invalid configuration", location=inject_base
+        )
     itype = inject.get("type")
     if itype == "bearer":
-        _require_fields(inject, _BEARER_FIELDS)
+        _require_fields(inject, _BEARER_FIELDS, base=inject_base)
         if inject["location"] != "authorization_header":
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(*(inject_base.split(".") + ["location"])),
+            )
         if cred.get("type") != "token":
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(*(base.split(".") + ["credential_ref"])),
+            )
         inject_out = {"type": "bearer", "location": "authorization_header"}
     elif itype == "basic":
-        _require_fields(inject, _BASIC_FIELDS)
+        _require_fields(inject, _BASIC_FIELDS, base=inject_base)
         if inject["location"] != "authorization_header":
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(*(inject_base.split(".") + ["location"])),
+            )
         if cred.get("type") != "username_password":
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(*(base.split(".") + ["credential_ref"])),
+            )
         inject_out = {"type": "basic", "location": "authorization_header"}
     elif itype == "api_key_header":
-        _require_fields(inject, _API_KEY_FIELDS)
-        header_name = validate_header_name(inject["header_name"])
+        _require_fields(inject, _API_KEY_FIELDS, base=inject_base)
+        try:
+            header_name = validate_header_name(inject["header_name"])
+        except ConfigError:
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(
+                    *(inject_base.split(".") + ["header_name"])
+                ),
+            ) from None
         if cred.get("type") != "token":
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location(*(base.split(".") + ["credential_ref"])),
+            )
         inject_out = {"type": "api_key_header", "header_name": header_name}
     else:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(inject_base.split(".") + ["type"])),
+        )
     return {
         "type": "http",
         "credential_ref": entry["credential_ref"],
@@ -521,18 +646,45 @@ def _validate_process_env(
     name: str,
     entry: Mapping[str, Any],
     credentials: Mapping[str, Mapping[str, Any]],
+    *,
+    base: str,
 ) -> Dict[str, Any]:
-    from .config import ConfigError
+    from .config import ConfigError, safe_diag_location
 
-    _require_fields(entry, _PROCESS_ENV_FIELDS)
-    _require_approval(entry)
-    cred = _resolve_cred(entry["credential_ref"], credentials)
+    _require_fields(entry, _PROCESS_ENV_FIELDS, base=base)
+    _require_approval(entry, base=base)
+    cred = _resolve_cred(entry["credential_ref"], credentials, base=base)
     # Env inject first edition: token only.
     if cred.get("type") != "token":
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
-    program = validate_program_path(entry["program"])
-    argv = validate_fixed_argv(entry["argv"], program)
-    env_name = validate_env_name(entry["env_name"])
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["credential_ref"])),
+        )
+    try:
+        program = validate_program_path(entry["program"])
+    except ConfigError:
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["program"])),
+        ) from None
+    try:
+        argv = validate_fixed_argv(entry["argv"], program)
+    except ConfigError:
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["argv"])),
+        ) from None
+    try:
+        env_name = validate_env_name(entry["env_name"])
+    except ConfigError:
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["env_name"])),
+        ) from None
     limits = _validate_process_limits(entry)
     return {
         "type": "process_env",
@@ -551,20 +703,44 @@ def _validate_stdin(
     name: str,
     entry: Mapping[str, Any],
     credentials: Mapping[str, Mapping[str, Any]],
+    *,
+    base: str,
 ) -> Dict[str, Any]:
-    from .config import ConfigError
+    from .config import ConfigError, safe_diag_location
 
-    _require_fields(entry, _STDIN_FIELDS)
-    _require_approval(entry)
-    cred = _resolve_cred(entry["credential_ref"], credentials)
+    _require_fields(entry, _STDIN_FIELDS, base=base)
+    _require_approval(entry, base=base)
+    cred = _resolve_cred(entry["credential_ref"], credentials, base=base)
     # First edition: token value only — avoid implied username_password formats.
     if cred.get("type") != "token":
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
-    program = validate_program_path(entry["program"])
-    argv = validate_fixed_argv(entry["argv"], program)
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["credential_ref"])),
+        )
+    try:
+        program = validate_program_path(entry["program"])
+    except ConfigError:
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["program"])),
+        ) from None
+    try:
+        argv = validate_fixed_argv(entry["argv"], program)
+    except ConfigError:
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["argv"])),
+        ) from None
     stdin_format = entry["stdin_format"]
     if stdin_format not in _STDIN_FORMATS:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location(*(base.split(".") + ["stdin_format"])),
+        )
     limits = _validate_process_limits(entry)
     return {
         "type": "stdin",
@@ -582,8 +758,10 @@ def _validate_stdin(
 __all__ = [
     "ALLOWED_BINDING_TYPES",
     "ALLOWED_CREDENTIAL_TYPES",
+    "ALLOWED_HTTP_METHODS",
     "ALLOWED_TOOLS",
     "FORBIDDEN_ENV_NAMES",
+    "MAX_ALLOWED_HTTP_PATHS",
     "PROCESS_REFERENCE_ARG_PATH",
     "PROCESS_REFERENCE_TOOL",
     "validate_binding",

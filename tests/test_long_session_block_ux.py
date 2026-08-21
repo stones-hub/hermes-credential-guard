@@ -616,7 +616,7 @@ def test_mutation_echoing_tool_name_in_location_must_fail(monkeypatch):
 
     monkeypatch.setattr(mw, "humanize_location", mutated)
 
-    def boom(request):
+    def boom(request, session_id=""):
         # Use humanize_location so the mutation is observed in block UX.
         loc = mw.humanize_location(
             request, ("messages", 0, "content")

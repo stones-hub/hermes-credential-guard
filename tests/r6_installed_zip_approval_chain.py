@@ -1,4 +1,4 @@
-"""R6 4a: 0.4.0 installed-ZIP approval chain (opt-in; NOT in the no-build corpus).
+"""R6 4a: release installed-ZIP approval chain (opt-in; NOT in the no-build corpus).
 
 Why this file is not named ``tests/test_*.py``
 ----------------------------------------------
@@ -25,9 +25,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "scripts" / "run_r6_installed_zip_e2e.py"
 ZIP_HELPERS = ROOT / "scripts" / "installed_zip_plugin.py"
-PINNED_ZIP = ROOT / "dist" / "credential-guard-0.4.0-hermes-plugin.zip"
+PINNED_ZIP = ROOT / "dist" / "credential-guard-0.4.5-hermes-plugin.zip"
 PINNED_SHA256 = (
-    "1fbc8c38da81226ef8a98f50702f2b3f5b369c5ce4767b8d0de8b2aaad20908d"
+    "125af9a681f65900a04edb51099ec52a1ebb01001f4396ab85770875a5951611"
 )
 
 

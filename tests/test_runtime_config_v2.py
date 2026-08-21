@@ -716,21 +716,17 @@ def test_c_ssh_config_runtime_load_is_rejected(isolated_home):
         load_and_publish_runtime()
 
 
-def test_c_adapter_not_ready_fail_closed(isolated_home):
-    from credential_guard.runtime_config import (
-        RuntimeConfigError,
-        load_and_publish_runtime,
-        require_runtime_adapter,
-    )
+def test_c_require_runtime_adapter_removed(isolated_home):
+    """C8: dead R1B stub is gone; adapters are real, not 'not ready'."""
+    import credential_guard.runtime_config as rc
 
     hermes, store = isolated_home
     token = _decoy()
     _write_json(store / CONFIG_FILENAME, _v2_token(token))
-    load_and_publish_runtime()
-    with pytest.raises(RuntimeConfigError) as ei:
-        require_runtime_adapter("internal-api")
-    assert ei.value.code == "RUNTIME_ADAPTER_NOT_READY"
-    assert token not in f"{ei.value!s}{ei.value!r}"
+    rc.load_and_publish_runtime()
+    assert not hasattr(rc, "require_runtime_adapter")
+    assert "RUNTIME_ADAPTER_NOT_READY" not in Path(rc.__file__).read_text(encoding="utf-8")
+    assert token  # keep canary in scope for hygiene
 
 
 # ---------------------------------------------------------------------------

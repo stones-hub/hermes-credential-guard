@@ -67,6 +67,49 @@ DEFAULT_LOCK_TIMEOUT_SECONDS = 5.0
 MAX_LOCK_TIMEOUT_SECONDS = 300
 _POLL_INTERVAL_SECONDS = 0.05
 
+# Distinct from CONFIG_LOCK_FS: the secure store directory does not exist at
+# all, so Credential Guard was never configured on this machine. Every other
+# store-dir fault (wrong mode, wrong owner, symlink, non-directory, any other
+# OSError) stays CONFIG_LOCK_FS and stays fail-closed. Callers must keep these
+# two archs distinguishable; collapsing them would turn a permission fault into
+# a "never configured" pass-through.
+CONFIG_LOCK_STORE_NOT_FOUND = "CONFIG_LOCK_STORE_NOT_FOUND"
+
+# The store root itself (the resolved Hermes home) does not exist. "Never
+# configured" can only be claimed about a machine we are actually looking at;
+# an absent root means HERMES_HOME points at no Hermes profile at all (typo,
+# deleted profile, stale inherited env, unit file drift). The host does not
+# validate HERMES_HOME -- hermes_constants._hermes_home_from_env returns
+# Path(val) unchecked -- so an already-configured operator can land here with a
+# populated store sitting elsewhere on disk. Fail closed and stay separable
+# from CONFIG_LOCK_STORE_NOT_FOUND: collapsing the two would hand a configured
+# operator's credentials to the Provider in plaintext.
+CONFIG_LOCK_STORE_ROOT_NOT_FOUND = "CONFIG_LOCK_STORE_ROOT_NOT_FOUND"
+
+#: The store root exists but carries no sign of being a Hermes home, AND
+#: ``HERMES_HOME`` was explicitly exported to name it. That combination is a
+#: misdirected environment variable (stale value, renamed profile, mount that
+#: landed before provisioning, scratch path), not a fresh install: a configured
+#: operator's real store lives elsewhere and would silently stop being
+#: redacted. Distinct from ROOT_NOT_FOUND so the diagnostic can say which of
+#: "the path does not exist" / "the path is not a Hermes home" happened.
+CONFIG_LOCK_STORE_ROOT_NOT_A_PROFILE = "CONFIG_LOCK_STORE_ROOT_NOT_A_PROFILE"
+
+#: Entries that mark a directory as a Hermes home. Deliberately broad and
+#: matched by ANY-of: a false positive merely restores the previous
+#: root-exists behaviour, whereas a false negative fails closed with a
+#: diagnostic. If the host layout ever changes, the failure mode is a loud
+#: block the operator can read -- never a silent loss of redaction.
+HERMES_HOME_MARKERS = (
+    "config.yaml",
+    "SOUL.md",
+    "MEMORY.md",
+    "plugins",
+    "skills",
+    "profiles",
+    "agent_sessions.db",
+)
+
 
 class ConfigLockError(Exception):
     """Fail-closed config lock error. Never embed secrets or absolute paths."""
@@ -85,9 +128,93 @@ def _mode_bits(mode: int) -> int:
     return stat.S_IMODE(mode)
 
 
+def _hermes_home_explicit_root() -> Optional[Path]:
+    """The root HERMES_HOME names, when it was explicitly exported.
+
+    Returns ``None`` when the variable is unset or blank -- the default-home
+    path a genuinely new user takes. A new user never exports HERMES_HOME; they
+    run ``hermes`` and land on ``~/.hermes``. Restricting the marker rule to the
+    explicit case is what keeps out-of-box usability intact while closing the
+    misdirected-variable hole.
+    """
+    raw = os.environ.get("HERMES_HOME", "").strip()
+    if not raw:
+        return None
+    try:
+        return Path(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _root_looks_like_hermes_home(root: Path) -> bool:
+    """True when ``root`` carries any known Hermes home entry.
+
+    Any-of, not all-of, and errors resolve to "yes". This function only ever
+    decides whether to RELAX to C1 pass-through, so an unreadable or unusual
+    layout must not be the reason a configured operator gets blocked -- while a
+    directory with no Hermes marker at all still fails closed.
+    """
+    for marker in HERMES_HOME_MARKERS:
+        try:
+            if (root / marker).exists():
+                return True
+        except OSError:
+            return True
+    return False
+
+
+def _root_is_misdirected_hermes_home(parent: Path) -> bool:
+    """True when ``parent`` IS the explicitly-set HERMES_HOME and looks wrong.
+
+    Both halves matter. The env var must actually name this root -- callers
+    pass arbitrary store directories (tests, migrations, explicit paths), and
+    judging those against an unrelated environment variable would be incoherent.
+    Only when the caller's root is the one HERMES_HOME resolves to does the
+    "is this a Hermes home at all" question apply.
+    """
+    declared = _hermes_home_explicit_root()
+    if declared is None:
+        return False
+    try:
+        if os.path.normpath(str(declared)) != os.path.normpath(str(parent)):
+            return False
+    except (TypeError, ValueError):
+        return False
+    return not _root_looks_like_hermes_home(parent)
+
+
 def _assert_secure_store_dir(store_dir: Path) -> None:
     try:
         lst = os.lstat(store_dir)
+    except FileNotFoundError as exc:
+        # Narrow split, intentionally only this one errno. The lock is taken
+        # before ``load_config`` runs, so without this branch an absent store
+        # directory would surface as CONFIG_LOCK_FS -> RUNTIME_CONFIG_UNAVAILABLE
+        # -- less specific than "directory present, file absent", which reaches
+        # config.py's CONFIG_NOT_FOUND. Widening this to ``except OSError``
+        # would report permission and I/O faults as "never configured".
+        #
+        # Second split: "never configured" is only claimable when the store
+        # ROOT (the resolved Hermes home) actually exists. When the root is
+        # absent too, HERMES_HOME points at no profile at all and a configured
+        # operator's store may live elsewhere -- so this must NOT reach C1
+        # pass-through. Probe the parent only; never another profile's path.
+        parent = Path(store_dir).parent
+        try:
+            root_missing = not parent.exists()
+        except OSError:
+            # Cannot even stat the parent -> do not claim "never configured".
+            root_missing = True
+        if root_missing:
+            raise ConfigLockError(CONFIG_LOCK_STORE_ROOT_NOT_FOUND) from exc
+        # Third split: the root exists, but does it look like a Hermes home at
+        # all? An explicitly exported HERMES_HOME naming a directory with no
+        # Hermes marker is a misdirected env var, not a fresh install -- the
+        # operator's real store is elsewhere and redaction would silently stop.
+        # Only the resolved root is inspected; no sibling profile is consulted.
+        if _root_is_misdirected_hermes_home(parent):
+            raise ConfigLockError(CONFIG_LOCK_STORE_ROOT_NOT_A_PROFILE) from exc
+        raise ConfigLockError(CONFIG_LOCK_STORE_NOT_FOUND) from exc
     except OSError as exc:
         raise ConfigLockError("CONFIG_LOCK_FS") from exc
     if stat.S_ISLNK(lst.st_mode) or not stat.S_ISDIR(lst.st_mode):
@@ -367,6 +494,10 @@ def exclusive_atomic_replace_config(
 
 __all__ = [
     "CONFIG_LOCK_ORDER_COMMENT",
+    "CONFIG_LOCK_STORE_NOT_FOUND",
+    "CONFIG_LOCK_STORE_ROOT_NOT_FOUND",
+    "CONFIG_LOCK_STORE_ROOT_NOT_A_PROFILE",
+    "HERMES_HOME_MARKERS",
     "ConfigLockError",
     "DEFAULT_LOCK_TIMEOUT_SECONDS",
     "MAX_LOCK_TIMEOUT_SECONDS",

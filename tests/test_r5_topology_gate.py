@@ -97,8 +97,8 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         ".r6-slice3-artifact-audit-task.md",
         "tests/support/artifact_composition_audit.py",
         "tests/test_r6_artifact_composition.py",
-        # Current release distribution policy: 0.4.4 artifacts landed + retained
-        # 0.4.2/0.4.3. Historical release reports and freeze sidecars remain.
+        # Current release distribution policy: 0.4.5 source candidate + retained
+        # 0.4.2/0.4.3/0.4.4. Historical release reports and freeze sidecars remain.
         "tests/test_current_dist_policy.py",
         # 0.4.2 release-close README fail-closed structure and behavior gates.
         "tests/test_readme_install_fail_closed.py",
@@ -243,6 +243,84 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         "dist/credential-guard-0.4.4-hermes-plugin.zip",
         "dist/hermes_credential_guard-0.4.4-py3-none-any.whl",
         "dist/hermes_credential_guard-0.4.4.tar.gz",
+        # R11 / 0.4.5 batch 1 (C1 zero-config pass-through + C2 config
+        # diagnostics): scheme doc, task brief, re-qualified test baseline,
+        # and the C1/C2 regression module.
+        "docs/R11-0.4.5-开箱可用性与保护边界透明化-方案.md",
+        ".c1c2-usability-task.md",
+        ".cg-known-test-baseline.md",
+        "tests/test_c1c2_zero_config_usability.py",
+        # R11 / 0.4.5 batch 1, round 6: the store location is derived from the
+        # install layout, never guessed from the environment; the round 4/5
+        # regression modules were deleted with the premise they asserted.
+        "tests/test_r6_store_location_derived.py",
+        # Round 7: the suite itself pointed the store at the operator's live
+        # profile via an inherited HERMES_HOME, and search_path_is_protected
+        # crashed when the store root was underivable. Both pinned below.
+        "tests/test_r7_harness_profile_isolation.py",
+        # R11 / 0.4.5 round 8: deferred non-blocking gaps found by the second
+        # read-only review, recorded instead of fixed (user decision).
+        "docs/R11-0.4.5-遗留待办.md",
+        "tests/test_r7_search_guard_underivable_root.py",
+        # R11 / 0.4.5 batch 1, round 2: narrow-fix task brief.
+        ".c1c2-round2-narrow-fix-task.md",
+        # R11 / 0.4.5 batch 1, round 3: closeout task brief.
+        ".c1c2-round3-closeout-task.md",
+        # R11 / 0.4.5 batch 2 (C5 tool description binding list).
+        ".c5c7-usability-task.md",
+        ".c5-slice-task.md",
+        ".c5-round2-task.md",
+        ".c5-round3-task.md",
+        "tests/test_c5c7_usability.py",
+        # R11 / 0.4.5 batch 2, C6 (redacted credential-code misuse error).
+        ".c6-task.md",
+        "credential_guard/credential_code.py",
+        # R11 / 0.4.5 batch 2, C6 fixture closeout task brief (later delta).
+        ".c6-plugin-fixture-closeout-task.md",
+        # R11 / 0.4.5 batch 2, C6 fixture gate-register task brief (later delta).
+        ".c6-fixture-gate-register-task.md",
+        # R11 / 0.4.5 batch 2, C7 (unregistered credential local risk warning).
+        ".c7-task.md",
+        "credential_guard/unregistered_warning.py",
+        # R11 / 0.4.5 batch 1, round 6: the single source of truth for the
+        # store location (derived from the install layout, never guessed from
+        # $HERMES_HOME) plus the suite-wide bridge that lets the existing
+        # HERMES_HOME-based fixtures keep pinning a temporary store.
+        "credential_guard/store_location.py",
+        "tests/conftest.py",
+        # R11 / 0.4.5 batch 1, round 6: C1 pass-through withdrawal regression.
+        "tests/test_r6_unconfigured_blocks.py",
+        # R11 / 0.4.5 batch 2, C7 empty-session LRU narrow-fix task brief (later delta).
+        ".c7-empty-session-lru-fix-task.md",
+        # R11 / 0.4.5 batch 2, C7 LRU gate-register task brief (later delta).
+        ".c7-lru-gate-register-task.md",
+        # R11 / 0.4.5 C5 architecture: safe target catalog sidecar.
+        "credential_guard/target_catalog.py",
+        "tests/test_c5_target_catalog.py",
+        # R11 / 0.4.5 fail-closed local events (async lastResort-safe).
+        "credential_guard/local_events.py",
+        # R11 / 0.4.5 batch 3, C8 (dead RUNTIME_ADAPTER_NOT_READY removal).
+        "tests/test_c8_dead_error_codes.py",
+        # R11 / 0.4.5 batch 3, C9 (conservative placeholder unification).
+        "tests/test_c9_placeholder_unification.py",
+        # R11 / 0.4.5 batch 3, C10 (offline validate CLI).
+        "tests/test_cli_validate.py",
+        # R11 / 0.4.5 version contract + pending final-ZIP harness (no dist write).
+        "docs/R11-0.4.5-验收报告.md",
+        "docs/R11-0.4.5-Release-Notes.md",
+        "tests/test_r11_045_release_contract.py",
+        "tests/r11_045_final_zip_e2e.py",
+        "scripts/run_r11_045_final_zip_e2e.py",
+        "scripts/run_r11_045_final_zip_tests.py",
+        # R11 / 0.4.5 artifacts landed: version-scoped clean_prior_artifacts fix
+        # (history-preserving) + dual-build four-file set built directly into
+        # dist/ (0.4.2/0.4.3/0.4.4 retained byte-identical).
+        "dist/artifact-manifest-0.4.5.json",
+        "dist/credential-guard-0.4.5-hermes-plugin.zip",
+        "dist/hermes_credential_guard-0.4.5-py3-none-any.whl",
+        "dist/hermes_credential_guard-0.4.5.tar.gz",
+        # R11 / 0.4.5 freeze sidecar (self-excluding, see its own EXCLUDES line).
+        ".r11-freeze-evidence.sha256",
     }
 )
 
@@ -281,6 +359,13 @@ R5_DELETED_PATHS: FrozenSet[str] = frozenset(
         "dist/credential-guard-0.3.1-hermes-plugin.zip",
         "dist/hermes_credential_guard-0.3.1-py3-none-any.whl",
         "dist/hermes_credential_guard-0.3.1.tar.gz",
+        # R11 / 0.4.5: the v1 dual-file migrator is retired. 0.4.5 is the first
+        # published release, so no installed base can hold a v1 store to upgrade
+        # from, and the module was the last private copy of the retired
+        # HERMES_HOME store guess. Removing it also drops the only dual-file
+        # allowlist entry the legacy-residue auditor had to grant.
+        "credential_guard/migration.py",
+        "tests/test_config_migration.py",
     }
 )
 
@@ -303,7 +388,6 @@ R5_MODIFIED_PATHS: FrozenSet[str] = frozenset(
         "credential_guard/config.py",
         "credential_guard/bindings.py",
         "credential_guard/runtime_config.py",
-        "credential_guard/migration.py",
         "credential_guard/release_identity.py",
         "credential_guard/sensitive_paths.py",
         "plugin.yaml",
@@ -326,7 +410,6 @@ R5_MODIFIED_PATHS: FrozenSet[str] = frozenset(
         "tests/test_r3c_wire_e2e.py",
         "tests/test_config_v2.py",
         "tests/test_runtime_config_v2.py",
-        "tests/test_config_migration.py",
         "tests/test_production_package_scan.py",
         "tests/test_reproducible_release.py",
         # R6 slice 1: the plugin-version assertions (0.3.1 -> 0.4.0) live in this
@@ -373,12 +456,46 @@ R5_MODIFIED_PATHS: FrozenSet[str] = frozenset(
         "tests/test_fail_closed.py",
         "tests/test_request_guard.py",
         "tests/test_variant_limits.py",
+        # Fail-closed async local-events backpressure coverage (result guard path).
+        "tests/test_injected_result_guard.py",
+        "tests/test_tool_result_guard.py",
         # Collision continuity: ordinary dynamic key collisions continue with
         # unique safe keys (historical fail-closed assertion superseded).
         "tests/test_identifier_and_keys.py",
         # Unresolved-field redaction: live-source URL-safe PEM probe now expects
         # whole-field replace + Provider=1 (historical ZIP evaluator unchanged).
         "tests/test_final_zip_encoding_canary.py",
+        # R11 / 0.4.5 C1+C2: store-dir-absent lock code (config_lock), its
+        # runtime mapping (runtime_config), the guard-seam decision + local
+        # notice/diagnostic emitters (middleware), and the matching
+        # transform_tool_result seam (hooks).
+        "credential_guard/config_lock.py",
+        "credential_guard/hooks.py",
+        # Round 2: the pass-through branch now snapshots the in-process base
+        # registry instead of returning an empty one.
+        "credential_guard/state.py",
+        # Fail-closed logging moved off the caller thread onto local_events.
+        "credential_guard/result_guard.py",
+        # C3/C4 documentation pass (completed separately; declared so FINAL
+        # accounting does not report it as a drifted preserved path).
+        "docs/R3-通用本地凭证注入-落地方案.md",
+        # R11 / 0.4.5 batch 3 C8: dead RUNTIME_ADAPTER_NOT_READY removal
+        # (tool_execution + callers/tests that asserted the old code).
+        "credential_guard/tool_execution.py",
+        "scripts/run_r2_e2e.py",
+        "scripts/run_r3c_wire_e2e.py",
+        "tests/test_config_lock_race.py",
+        "tests/test_http_reference_tool.py",
+        "tests/test_injection_toctou.py",
+        "tests/test_plan_key_reuse_attack.py",
+        "tests/test_r2_main_agent_path.py",
+        "tests/test_r2_published_snapshot.py",
+        "tests/test_r3a_handler_wiring.py",
+        "tests/test_r3a_main_agent_path.py",
+        # R11 / 0.4.5 batch 3 C9: tool-result placeholder assertions track
+        # conservative <SECRET:cg_...> tokens.
+        "tests/test_r3b_process_adapter.py",
+        "tests/test_result_guard_authenticity_gate.py",
     }
 )
 
@@ -742,7 +859,8 @@ def test_preserved_derived_from_baseline_without_guessing():
     preserved = derive_preserved(baseline)
     assert "plugin.yaml" not in preserved  # modified
     assert "credential_guard/tools.py" not in preserved  # deleted
-    assert "scripts/run_r3c_wire_e2e.py" in preserved  # must stay frozen
+    # R11 C8: run_r3c_wire_e2e.py left the frozen set (ADAPTER_NOT_READY cleanup).
+    assert "scripts/run_r3c_wire_e2e.py" not in preserved
     assert ".r3c-freeze-evidence.sha256" in preserved
     assert ".r4-freeze-evidence.sha256" in preserved
 
@@ -1029,13 +1147,14 @@ def test_mutation_fake_exclude_forged_skip_policy_is_red():
     """Attack enumerator exclusion policy — forged extras/preserved must be rejected."""
     baseline = load_baseline()
     preserved = derive_preserved(baseline)
-    victim = "scripts/run_r3c_wire_e2e.py"
+    # Prefer a still-frozen sidecar; fall back to any preserved path.
+    victim = ".r3c-freeze-evidence.sha256"
     assert victim in preserved
-    forged = set(CLOSED_SKIP_DIRS_LIVE) | {"run_r3c_wire_e2e.py", "unexpected_extra"}
+    forged = set(CLOSED_SKIP_DIRS_LIVE) | {"r3c-freeze-evidence.sha256", "unexpected_extra"}
     live, skip_errs = enumerate_live(REPO, skip_dirs=forged)
     assert skip_errs, "forged skip policy must produce errors"
     skip_errs = validate_skip_policy(
-        forged, preserved_sample=[victim, "scripts/run_r3c_wire_e2e.py"]
+        forged, preserved_sample=[victim, ".r4-freeze-evidence.sha256"]
     )
     assert skip_errs
     errors = classify_workspace(

@@ -1,9 +1,10 @@
-"""Current release dist policy: 0.4.4 artifacts landed + retained 0.4.2/0.4.3.
+"""Current release dist policy: 0.4.5 source candidate + retained 0.4.2/0.4.3/0.4.4.
 
 Phase contract (strict=True):
-- ``source_candidate_pending_build``: PLUGIN_VERSION is 0.4.4; dist retains
-  historical 0.4.2 + landed 0.4.3 four-file sets; 0.4.4 artifacts must be absent.
-- ``artifacts_landed``: flipped after dual-build copy2; 0.4.4 four files must
+- ``source_candidate_pending_build``: PLUGIN_VERSION is 0.4.5; dist retains
+  historical 0.4.2 + 0.4.3 + landed 0.4.4 four-file sets; 0.4.5 artifacts must
+  be absent.
+- ``artifacts_landed``: flipped after dual-build copy2; 0.4.5 four files must
   be present alongside retained history.
 """
 
@@ -20,7 +21,7 @@ from credential_guard.release_identity import (
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 
-# Strict stage flag — flipped after dual-build copy2 land.
+# Strict stage flag — flipped to artifacts_landed after the real dual build.
 CURRENT_DIST_PHASE = "artifacts_landed"
 STRICT = True
 
@@ -36,7 +37,13 @@ _HISTORICAL_043 = {
     "hermes_credential_guard-0.4.3-py3-none-any.whl",
     "hermes_credential_guard-0.4.3.tar.gz",
 }
-_CURRENT_044 = {
+_HISTORICAL_044 = {
+    "artifact-manifest-0.4.4.json",
+    "credential-guard-0.4.4-hermes-plugin.zip",
+    "hermes_credential_guard-0.4.4-py3-none-any.whl",
+    "hermes_credential_guard-0.4.4.tar.gz",
+}
+_CURRENT_045 = {
     ARTIFACT_MANIFEST_FILENAME,
     PLUGIN_ZIP_FILENAME,
     SDIST_FILENAME,
@@ -45,27 +52,27 @@ _CURRENT_044 = {
 
 
 def test_dist_phase_contract_is_strict_and_version_aligned():
-    assert PLUGIN_VERSION == "0.4.4"
+    assert PLUGIN_VERSION == "0.4.5"
     assert STRICT is True
     assert CURRENT_DIST_PHASE in {
         "source_candidate_pending_build",
         "artifacts_landed",
     }
-    assert ARTIFACT_MANIFEST_FILENAME == "artifact-manifest-0.4.4.json"
-    assert PLUGIN_ZIP_FILENAME == "credential-guard-0.4.4-hermes-plugin.zip"
+    assert ARTIFACT_MANIFEST_FILENAME == "artifact-manifest-0.4.5.json"
+    assert PLUGIN_ZIP_FILENAME == "credential-guard-0.4.5-hermes-plugin.zip"
 
 
 def test_dist_contains_retained_history_and_phase_current_set():
     actual = {path.name for path in DIST.iterdir() if path.is_file()}
+    retained = _HISTORICAL_042 | _HISTORICAL_043 | _HISTORICAL_044
     if CURRENT_DIST_PHASE == "source_candidate_pending_build":
-        expected = _HISTORICAL_042 | _HISTORICAL_043
-        assert actual == expected
-        # 0.4.4 must not silently appear / be faked during source-candidate.
+        assert actual == retained
+        # 0.4.5 must not silently appear / be faked during source-candidate.
         assert not (DIST / PLUGIN_ZIP_FILENAME).exists()
         assert not (DIST / ARTIFACT_MANIFEST_FILENAME).exists()
-        assert _CURRENT_044.isdisjoint(actual)
+        assert _CURRENT_045.isdisjoint(actual)
     else:
-        expected = _HISTORICAL_042 | _HISTORICAL_043 | _CURRENT_044
+        expected = retained | _CURRENT_045
         assert actual == expected
         assert (DIST / PLUGIN_ZIP_FILENAME).is_file()
         assert (DIST / ARTIFACT_MANIFEST_FILENAME).is_file()

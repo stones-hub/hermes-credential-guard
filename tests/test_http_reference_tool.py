@@ -13,7 +13,7 @@ import pytest
 from credential_guard import register
 from credential_guard.runtime_config import HTTP_REFERENCE_TOOL
 from credential_guard.tool_execution import (
-    RUNTIME_ADAPTER_NOT_READY,
+    PLAN_NOT_PENDING,
     set_http_transport_override_for_tests,
     reset_http_adapter_observe_for_tests,
 )
@@ -191,7 +191,7 @@ from credential_guard.runtime_config import (
     reset_runtime_for_tests,
 )
 from credential_guard.tool_execution import (
-    RUNTIME_ADAPTER_NOT_READY,
+    PLAN_NOT_PENDING,
     set_http_transport_override_for_tests,
     reset_http_adapter_observe_for_tests,
 )
@@ -205,6 +205,12 @@ from credential_guard.injection_plan import PlanState
 scenario = os.environ["CG_HTTP_REF_SCENARIO"]
 hermes_home = Path(os.environ["HERMES_HOME"])
 store = hermes_home / "credential-guard"
+
+# The plugin derives its store from its install location and no longer reads
+# HERMES_HOME; this probe runs from a checkout, so pin the store explicitly.
+from credential_guard import store_location as _sl
+
+_sl.use_store_dir(store)
 token = "CG_DISP_" + secrets.token_hex(12)
 doc = {
     "version": 2,
@@ -346,7 +352,7 @@ out = {
     "order": list(order),
     "downstream": evidence["downstream"],
     "approval_message": evidence["approval_message"],
-    "adapter_not_ready": RUNTIME_ADAPTER_NOT_READY in blob,
+    "adapter_not_ready": PLAN_NOT_PENDING in blob,
     "adapter_ok": ('"ok":true' in blob.replace(" ", "") and '"status":201' in blob.replace(" ", "")),
     "plan_state": plan.state.value if plan else None,
     "token_in_result": int(token in blob),
@@ -536,15 +542,9 @@ def test_b_handler_direct_call_never_connects_or_resolves(monkeypatch):
         resolve_hits.append(1)
         raise AssertionError("must not resolve")
 
-    monkeypatch.setattr(
-        "credential_guard.runtime_config.require_runtime_adapter",
-        fake_resolve,
-        raising=False,
-    )
-
     out = json.loads(handle_http_credential_request(_ref_args()))
     assert out["ok"] is False
-    assert out["error"] == RUNTIME_ADAPTER_NOT_READY
+    assert out["error"] == "CALL_IDENTITY_REQUIRED"
     assert banned == []
     assert resolve_hits == []
     assert DECOY not in json.dumps(out)

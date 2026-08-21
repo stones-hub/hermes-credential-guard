@@ -22,7 +22,9 @@ from credential_guard.runtime_config import (
     reset_runtime_for_tests,
 )
 from credential_guard.tool_execution import (
-    RUNTIME_ADAPTER_NOT_READY,
+    PLAN_NOT_FOUND,
+    PLAN_NOT_PENDING,
+    PLAN_RECHECK_FAILED,
     on_tool_execution,
     reset_http_adapter_observe_for_tests,
     set_http_transport_override_for_tests,
@@ -162,13 +164,18 @@ def _exec(args, tc="tc", session="s1", turn="t1", tool=HTTP_REFERENCE_TOOL):
     return out, calls
 
 
-def _assert_blocked(out: str, calls: List[Any], canary: str) -> None:
+def _assert_blocked(
+    out: str,
+    calls: List[Any],
+    canary: str,
+    expected_error: str = PLAN_RECHECK_FAILED,
+) -> None:
     # Host next_call may run once to reach the formal handler; no secret leak.
     assert len(calls) <= 1
     assert canary not in out
     data = json.loads(out)
     assert data.get("ok") is False
-    assert data["error"] == RUNTIME_ADAPTER_NOT_READY
+    assert data["error"] == expected_error
 
 
 def _assert_adapter_ok(out: str, calls: List[Any], canary: str) -> None:
@@ -232,7 +239,7 @@ def test_toctou_change_session_ids(env):
     token = env["token"]
     args = _ready("tc-sess", session="s1")
     out, calls = _exec(args, tc="tc-sess", session="s2")
-    _assert_blocked(out, calls, token)
+    _assert_blocked(out, calls, token, PLAN_NOT_FOUND)
 
 
 def test_toctou_binding_deleted(env):
@@ -252,7 +259,7 @@ def test_toctou_replay_consumed(env):
     out1, calls1 = _exec(args, tc="tc-replay")
     _assert_adapter_ok(out1, calls1, token)
     out2, calls2 = _exec(args, tc="tc-replay")
-    _assert_blocked(out2, calls2, token)
+    _assert_blocked(out2, calls2, token, PLAN_NOT_PENDING)
     assert get_plan_store().lookup("s1", "tc-replay").state is PlanState.CONSUMED
 
 

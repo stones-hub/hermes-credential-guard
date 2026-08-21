@@ -17,7 +17,7 @@ from typing import Dict
 
 import pytest
 
-from credential_guard.tool_execution import RUNTIME_ADAPTER_NOT_READY
+from credential_guard.tool_execution import PLAN_NOT_PENDING
 
 REPO = Path(__file__).resolve().parents[1]
 HERMES_AGENT_ROOT = Path(
@@ -51,6 +51,13 @@ store = hermes_home / "credential-guard"
 sys.path.insert(0, os.environ["HERMES_AGENT_ROOT"])
 sys.path.insert(0, str(repo))
 
+# The plugin derives its store from its install location and no longer reads
+# HERMES_HOME. This probe runs from a source checkout, so pin the store
+# explicitly to the scenario's temporary profile.
+from credential_guard import store_location as _sl
+
+_sl.use_store_dir(store)
+
 for _name in ("requests", "httpx", "modal", "openai", "anthropic", "firecrawl"):
     if _name not in sys.modules:
         sys.modules[_name] = types.ModuleType(_name)
@@ -60,7 +67,7 @@ import credential_guard.tool_execution as te_mod
 from credential_guard import register
 from credential_guard.reference_tools import handle_http_credential_request
 from credential_guard.tool_execution import (
-    RUNTIME_ADAPTER_NOT_READY,
+    PLAN_NOT_PENDING,
     reset_http_adapter_observe_for_tests,
     set_http_transport_override_for_tests,
     get_http_adapter_invoke_count,
@@ -95,7 +102,7 @@ if os.environ.get("CG_MUTATE_OLD_EXEC") == "1":
                 _gps().invalidate(sid, tc)
             except Exception:
                 pass
-            return te_mod._safe_error()
+            return te_mod._safe_error(te_mod.PLAN_NOT_PENDING)
         return _real_exec(args=args, next_call=next_call, **kw)
     te_mod.on_tool_execution = _mutated_exec
     cg_pkg.on_tool_execution = _mutated_exec
@@ -321,7 +328,7 @@ try:
             "scenario": scenario,
             "order": list(order),
             "counts": counts,
-            "adapter_not_ready": False,
+            "stage_error": None,
             "plan_state": None,
             "blocked": False,
             "token_in_result": 0,
@@ -423,7 +430,11 @@ try:
         "scenario": scenario,
         "order": list(order),
         "counts": counts,
-        "adapter_not_ready": RUNTIME_ADAPTER_NOT_READY in blob,
+        "stage_error": (
+            json.loads(blob).get("error")
+            if isinstance(result, str) and blob.lstrip().startswith("{")
+            else None
+        ),
         "adapter_ok": adapter_ok,
         "plan_state": plan.state.value if plan else None,
         "blocked": bool(getattr(managed, "blocked", False)),
@@ -510,7 +521,7 @@ def test_main_agent_approve_reaches_handler_adapter_not_ready(tmp_path):
         "adapter",
     ]
     assert data["adapter_ok"] is True
-    assert data["adapter_not_ready"] is False
+    assert data["stage_error"] is None
     assert data["plan_state"] == "consumed"
     assert data["secret_resolve_delta"] == 0
     assert data["injection_resolve_delta"] == 1
@@ -553,7 +564,7 @@ def test_main_agent_approval_error_fail_closed(tmp_path):
 def test_main_agent_mutate_args_after_approve_fail_closed(tmp_path):
     data = _run("approve_then_mutate_args", tmp_path)
     assert data["counts"]["handler"] == 1
-    assert data["adapter_not_ready"] is True
+    assert data["stage_error"] == "PLAN_RECHECK_FAILED"
     assert data["plan_state"] == "invalidated"
     assert data["secret_resolve_delta"] == 0
 
@@ -580,7 +591,7 @@ def test_main_agent_replay_no_second_consume(tmp_path):
     assert data["adapter_ok"] is True
     assert data["injection_resolve_delta"] == 1
     assert '"ok":false' in data["result2_preview"].replace(" ", "") or (
-        RUNTIME_ADAPTER_NOT_READY in data["result2_preview"]
+        PLAN_NOT_PENDING in data["result2_preview"]
     )
 
 

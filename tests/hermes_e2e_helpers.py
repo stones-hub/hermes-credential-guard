@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -25,6 +26,37 @@ def opaque_token(key: str, field: str) -> str:
 
 
 DECOY_TOKEN = opaque_token("db", "password")
+
+_HERMES_CLI_VERSION_CACHE: List[Optional[str]] = []
+
+
+def _hermes_cli_version() -> Optional[str]:
+    """Read ``hermes_cli.__version__`` from the real Hermes interpreter.
+
+    Read out-of-process on purpose: importing Hermes into the pytest process
+    would pull its whole CLI stack into the test runner. Cached because every
+    isolated-Hermes fixture needs it.
+    """
+    if _HERMES_CLI_VERSION_CACHE:
+        return _HERMES_CLI_VERSION_CACHE[0]
+    value: Optional[str] = None
+    try:
+        proc = subprocess.run(
+            [
+                str(HERMES_PYTHON),
+                "-c",
+                "import hermes_cli;print(hermes_cli.__version__)",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if proc.returncode == 0:
+            value = proc.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        value = None
+    _HERMES_CLI_VERSION_CACHE.append(value)
+    return value
 
 
 @dataclass
@@ -351,6 +383,46 @@ def assert_worker_evidence(
         assert delta.get("unchanged") is False
 
 
+def _seed_update_check_cache(hermes_home: Path) -> None:
+    """Pre-seed Hermes' update-check cache so the isolated run stays offline.
+
+    Root cause (measured 2026-08-21 via a stack-trace probe inside the loopback
+    launcher's ``_record``): ``hermes_cli/banner.py`` spawns a daemon thread
+    running ``check_for_updates() -> _check_via_local_git() ->
+    _github_compare_behind()``, which reaches ``api.github.com:443``. That
+    connection is unrelated to Credential Guard, but it lands in the same
+    per-test network audit file and makes ``assert_all_loopback`` fail
+    non-deterministically — the thread is a race against process exit, so any
+    subset of the CLI E2E tests can go red on any given run. The failure also
+    reproduces on the released 0.4.4 baseline, i.e. it is a long-standing test
+    isolation defect, not a product regression.
+
+    Hermes caches the result in ``$HERMES_HOME/.update_check`` for 6 hours and
+    returns early when ``ts`` is fresh AND ``rev``/``ver`` match. Writing a
+    fresh entry keyed to the running interpreter's version makes the early
+    return fire before any socket is opened, so the isolated CLI never talks to
+    GitHub. This suppresses only Hermes' own update ping; every Credential
+    Guard egress path is untouched and still audited.
+    """
+    version = _hermes_cli_version()
+    if version is None:
+        return
+    cache = {
+        "ts": time.time(),
+        "behind": 0,
+        # ``HERMES_REVISION`` is unset in the isolated env, so banner.py reads
+        # ``embedded_rev`` as None and compares it against this field.
+        "rev": None,
+        "ver": version,
+    }
+    try:
+        (hermes_home / ".update_check").write_text(
+            json.dumps(cache), encoding="utf-8"
+        )
+    except OSError:
+        pass
+
+
 def prepare_isolated_hermes(tmp_path: Path, base_url: str) -> IsolatedHermes:
     home = tmp_path / "home"
     hermes_home = tmp_path / "hermes_home"
@@ -423,6 +495,8 @@ def prepare_isolated_hermes(tmp_path: Path, base_url: str) -> IsolatedHermes:
 
     net_audit_path = tmp / "net_audit.json"
     net_audit_path.write_text("{\"attempts\": []}\n", encoding="utf-8")
+
+    _seed_update_check_cache(hermes_home)
 
     config = {
         "model": {

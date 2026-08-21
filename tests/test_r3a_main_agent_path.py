@@ -73,7 +73,7 @@ def test_r3a_main_agent_replay_second_adapter_zero(tmp_path: Path):
     assert data["counts"].get("resolve") == 1
     assert data["counts"].get("adapter") == 1
     preview2 = data["result2_preview"]
-    assert '"ok":false' in preview2.replace(" ", "") or "RUNTIME_ADAPTER_NOT_READY" in preview2
+    assert '"ok":false' in preview2.replace(" ", "") or "PLAN_NOT_PENDING" in preview2
 
 
 @pytest.mark.parametrize("seam", ["consume", "resolve", "adapter"])

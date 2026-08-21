@@ -21,7 +21,7 @@ from credential_guard.runtime_config import (
     load_and_publish_runtime,
     reset_runtime_for_tests,
 )
-from credential_guard.tool_execution import RUNTIME_ADAPTER_NOT_READY, on_tool_execution
+from credential_guard.tool_execution import PLAN_NOT_PENDING, on_tool_execution
 from credential_guard.reference_tools import handle_http_credential_request
 from credential_guard.tool_request import (
     get_plan_store,
@@ -381,7 +381,7 @@ def test_d2_second_call_blocked(env):
         turn_id="t1",
         tool_call_id="tc-once",
     )
-    assert json.loads(out)["error"] == RUNTIME_ADAPTER_NOT_READY
+    assert json.loads(out)["error"] == PLAN_NOT_PENDING
     assert calls == []
 
 

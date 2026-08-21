@@ -12,6 +12,7 @@ from credential_guard.approval import on_pre_tool_call
 from credential_guard.hooks import on_transform_tool_result
 from credential_guard.middleware import SAFE_BLOCK_MESSAGE, is_blocked_response_content, on_llm_execution, on_llm_request
 from credential_guard.result_guard import REDACTED_SECRET, RESULT_GUARD_FAIL_TEXT
+from credential_guard.runtime_config import reset_runtime_for_tests
 from credential_guard.sensitive_paths import (
     contains_private_key_material,
     extract_path_candidates,
@@ -259,9 +260,26 @@ def test_transform_tool_result_blocks_protected_path_result(tmp_path: Path, monk
     assert json.loads(out)["error"]
 
 
-def test_llm_execution_redacts_locatable_raw_pem_then_calls_provider():
+def test_llm_execution_redacts_locatable_raw_pem_then_calls_provider(
+    tmp_path: Path, monkeypatch
+):
     """Complete raw PEM is replaced; provider sees zero plaintext key bytes."""
     from credential_guard.result_guard import REDACTED_SECRET
+
+    hermes = tmp_path / "hermes_home"
+    store = hermes / "credential-guard"
+    store.mkdir(parents=True)
+    os.chmod(store, 0o700)
+    cfg = store / "credential-guard.json"
+    cfg.write_text(
+        json.dumps({"version": 2, "credentials": {}, "bindings": {}}),
+        encoding="utf-8",
+    )
+    os.chmod(cfg, 0o600)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HERMES_HOME", str(hermes))
+    (tmp_path / "home").mkdir(exist_ok=True)
+    reset_runtime_for_tests()
 
     calls = []
 
@@ -279,6 +297,7 @@ def test_llm_execution_redacts_locatable_raw_pem_then_calls_provider():
     assert "BEGIN OPENSSH PRIVATE KEY" not in sent
     assert OPENSSH_KEY not in sent
     assert REDACTED_SECRET in calls[0]["messages"][0]["content"]
+    reset_runtime_for_tests()
 
 
 def test_llm_request_redacts_or_fail_closes_private_key():

@@ -19,6 +19,7 @@ from .process_tools import (
     handle_credential_process_run,
 )
 from .constants import TOOLSET_NAME
+from .target_catalog import prepare_registration_catalog
 
 
 def register(ctx) -> None:
@@ -28,21 +29,29 @@ def register(ctx) -> None:
     ctx.register_middleware("tool_execution", on_tool_execution)
     ctx.register_hook("transform_tool_result", on_transform_tool_result)
     ctx.register_hook("pre_tool_call", on_pre_tool_call)
+    # Startup: read safe target catalog sidecar only (never main config body).
+    # Missing/invalid/stale sidecar → static descriptions; formal egress unchanged.
+    try:
+        prepare_registration_catalog()
+    except Exception:
+        pass
+    http_schema = http_credential_request_schema()
     ctx.register_tool(
         name=HTTP_REFERENCE_TOOL,
         toolset=TOOLSET_NAME,
-        schema=http_credential_request_schema(),
+        schema=http_schema,
         handler=handle_http_credential_request,
         check_fn=check_http_credential_request_available,
-        description=http_credential_request_schema()["description"],
+        description=http_schema["description"],
     )
+    process_schema = credential_process_run_schema()
     ctx.register_tool(
         name=PROCESS_REFERENCE_TOOL,
         toolset=TOOLSET_NAME,
-        schema=credential_process_run_schema(),
+        schema=process_schema,
         handler=handle_credential_process_run,
         check_fn=check_credential_process_run_available,
-        description=credential_process_run_schema()["description"],
+        description=process_schema["description"],
     )
     ctx.register_cli_command(
         name="credential-guard",

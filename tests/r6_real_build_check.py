@@ -215,6 +215,101 @@ def test_real_build_requires_explicit_authorization(monkeypatch, tmp_path):
     assert sorted(os.listdir(out_dir)) == []
 
 
+def test_clean_prior_artifacts_is_version_scoped_and_spares_history(
+    monkeypatch, tmp_path
+):
+    """Cleaning must delete only THIS version's files, never other releases.
+
+    Regression guard for a measured defect (2026-08-21): the previous
+    implementation globbed ``*.whl`` / ``*.tar.gz`` / ``*-hermes-plugin.zip``
+    unconditionally, so building into the repository ``dist/`` silently deleted
+    all nine git-tracked 0.4.2/0.4.3/0.4.4 artifacts that four gates
+    hash-freeze (dist/ went 12 files -> 7). Earlier releases only survived
+    because the build ran in a temp dir and was hand-copied afterwards.
+
+    Both directions are load-bearing:
+      * other-version artifacts survive untouched (byte-identical), and
+      * this version's stale leftovers are still swept, so a partial build
+        cannot be mistaken for a fresh one.
+    """
+    monkeypatch.setenv("CG_NO_BUILD_TRIPWIRE", "1")
+    monkeypatch.setenv("CG_R6_BUILD_AUTHORIZED", "1")
+    builder = _load_builder()
+
+    out_dir = Path(tempfile.mkdtemp(prefix="r6_clean_scope_", dir=str(tmp_path)))
+    _assert_safe_out_dir(out_dir)
+
+    version = builder.PLUGIN_VERSION
+    assert version == "0.4.5"
+
+    # Other releases (must survive) — mirrors the real retained dist/ history.
+    historical = {
+        "hermes_credential_guard-0.4.4-py3-none-any.whl": b"hist-wheel-044",
+        "hermes_credential_guard-0.4.4.tar.gz": b"hist-sdist-044",
+        "credential-guard-0.4.4-hermes-plugin.zip": b"hist-zip-044",
+        "artifact-manifest-0.4.4.json": b"hist-manifest-044",
+        "hermes_credential_guard-0.4.2-py3-none-any.whl": b"hist-wheel-042",
+        "credential-guard-0.4.3-hermes-plugin.zip": b"hist-zip-043",
+    }
+    # This version's stale leftovers (must be swept).
+    stale = {
+        builder.WHEEL_NAME: b"stale-wheel",
+        builder.SDIST_NAME: b"stale-sdist",
+        builder.PLUGIN_ZIP_NAME: b"stale-zip",
+        builder.ARTIFACT_MANIFEST_NAME: b"stale-manifest",
+        f"credential-guard-{version}-hermes-plugin.zip.tmp": b"stale-partial",
+    }
+    for name, blob in {**historical, **stale}.items():
+        (out_dir / name).write_bytes(blob)
+
+    builder.clean_prior_artifacts(out_dir)
+
+    survivors = {p.name for p in out_dir.iterdir() if p.is_file()}
+    assert survivors == set(historical), (
+        f"version-scoped clean drifted; survivors={sorted(survivors)}"
+    )
+    for name, blob in historical.items():
+        assert (out_dir / name).read_bytes() == blob, f"history mutated: {name}"
+
+
+def test_real_build_into_populated_dist_preserves_other_versions(
+    monkeypatch, tmp_path
+):
+    """A full real build into a dist-like dir must add, not replace, history."""
+    monkeypatch.setenv("CG_NO_BUILD_TRIPWIRE", "1")
+    monkeypatch.setenv("CG_R6_BUILD_AUTHORIZED", "1")
+    builder = _load_builder()
+
+    out_dir = Path(tempfile.mkdtemp(prefix="r6_dist_like_", dir=str(tmp_path)))
+    _assert_safe_out_dir(out_dir)
+
+    # Seed with the real retained history so the assertion is about bytes,
+    # not about placeholder files.
+    repo_dist = ROOT / "dist"
+    seeded = {}
+    for path in sorted(repo_dist.iterdir()):
+        if path.is_file():
+            shutil.copy2(path, out_dir / path.name)
+            seeded[path.name] = _sha256(path)
+    assert seeded, "repo dist/ must carry retained history for this check"
+
+    builder.build_all(out_dir)
+
+    after = {p.name: _sha256(p) for p in out_dir.iterdir() if p.is_file()}
+    for name, digest in seeded.items():
+        assert name in after, f"historical artifact deleted by build: {name}"
+        assert after[name] == digest, f"historical artifact rewritten: {name}"
+
+    current = {
+        builder.WHEEL_NAME,
+        builder.SDIST_NAME,
+        builder.PLUGIN_ZIP_NAME,
+        builder.ARTIFACT_MANIFEST_NAME,
+    }
+    assert current <= set(after), "current-version artifacts missing after build"
+    assert set(after) == set(seeded) | current
+
+
 def test_production_source_single_byte_mutation_changes_identities(
     monkeypatch, tmp_path
 ):

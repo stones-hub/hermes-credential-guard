@@ -5,6 +5,7 @@ Candidate evidence only — does not claim R3/R3C PASS.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -95,10 +96,21 @@ def _assert_zero_secrets(r: dict) -> None:
 
 
 def _assert_approve_common(r: dict, *, adapter: str) -> None:
-    assert r["order"] == _FULL_APPROVE_ORDER
-    assert r["counts"]["consume"] == 1
-    assert r["counts"]["resolve"] == 1
-    assert r["counts"]["adapter"] == 1
+    # R5 THREAD-MODEL ADAPTATION (observation only, not a relaxation).
+    #
+    # ``order``/``counts`` come from ``sys.setprofile`` inside the AST-frozen
+    # carrier ``scripts/run_r3c_wire_e2e.py``, which observes the CALLING thread
+    # only. Hermes now drives tool dispatch on a worker thread, so the profiler
+    # records just ``approval_gate`` (patched on the main thread) even though the
+    # full chain executes. The carrier may not be edited (digest pinned in
+    # tests/test_r3c_evidence_authenticity_gate.py), so the historical
+    # ``order == _FULL_APPROVE_ORDER`` comparison is asserted no longer.
+    #
+    # Load-bearing replacement: real side-effect counters, which cannot be faked
+    # by an observer — the credential really resolved, the adapter really ran,
+    # the loopback target really received an authenticated request, and zero
+    # plaintext reached the wire. Live ordering evidence for the current thread
+    # model lives in tests/test_r5_wire_e2e.py and the installed-ZIP matrix.
     assert r["injection_resolve_delta"] == 1
     _assert_zero_secrets(r)
     assert r["used_environ_copy"] is False
@@ -154,10 +166,14 @@ def _assert_deny_closed(r: dict) -> None:
 
 def _assert_timeout_distinct(r: dict, deny_r: dict) -> None:
     _assert_deny_closed(r)
-    assert r["approval_is_timeout"] is True
-    assert r["approval_timeout_branch"] is True
-    assert r["approval_outcome"] == "timeout"
-    assert r["await_gateway_call_count"] > 0
+    # R5 THREAD-MODEL ADAPTATION — see _assert_approve_common.
+    #
+    # ``await_gateway_call_count`` is profiler-derived and therefore blind to the
+    # worker thread, and ``approval_is_timeout``/``approval_timeout_branch``/
+    # ``approval_outcome`` are all computed FROM that counter inside the frozen
+    # carrier (run_r3c_wire_e2e.py:1434-1442), so they collapse with it. The
+    # decisive, observer-independent timeout evidence is the host's own raw
+    # approval record, which is asserted below and remains fully load-bearing.
     assert r["host_approval_raw_intact"] is True
     assert isinstance(r.get("host_approval_raw"), dict)
     host_msg = str(r["host_approval_raw"].get("message") or "")
@@ -178,30 +194,78 @@ def _assert_timeout_distinct(r: dict, deny_r: dict) -> None:
     assert r["counts"]["adapter"] == 0
 
 
+def _assert_replay_second_call_did_not_execute(r: dict, *, adapter: str) -> None:
+    """Replay closure via whole-run production counters (observer-independent).
+
+    The carrier's ``second_*`` per-call deltas are profiler-derived and always
+    ``None`` under the worker-thread model, so they cannot express "the second
+    call did nothing". These totals can: the scenario issues TWO tool calls with
+    the same reference, so if the replay were NOT closed the credential would
+    resolve twice and the adapter would run twice.
+
+    Guarded by ``test_mutation_replay_second_call_totals_must_red``.
+    """
+    assert r["injection_resolve_delta"] == 1, (
+        f"credential resolved {r['injection_resolve_delta']}x across both calls; "
+        "replay was not closed"
+    )
+    if adapter == "http":
+        assert r["http_adapter_delta"] == 1
+        assert r["http_target_hits"] == 1, (
+            f"loopback target received {r['http_target_hits']} authenticated "
+            "requests; the replayed call reached the peer"
+        )
+        assert r["process_start_delta"] == 0
+    else:
+        assert r["process_start_delta"] == 1, (
+            f"local program started {r['process_start_delta']}x across both "
+            "calls; replay was not closed"
+        )
+        assert r["http_adapter_delta"] == 0
+
+
 def _assert_replay(r: dict, *, adapter: str) -> None:
     assert r["injection_resolve_delta"] == 1
-    assert r["counts"]["resolve"] == 1
-    assert r["counts"]["adapter"] == 1
-    assert r["counts"]["tool_request"] >= 2
+    # R5 THREAD-MODEL ADAPTATION — profiler-derived counts/identities are blind
+    # to the worker thread (see _assert_approve_common). Replay closure is
+    # asserted below via observer-independent side-effect deltas.
     assert r["run_conversation_calls"] == 1
-    assert r["replay_identity_same"] is True
-    ids = r["tool_request_identities"]
-    assert len(ids) >= 2
-    for key in ("session_id", "turn_id", "tool_call_id", "args_digest"):
-        assert ids[0][key] == ids[1][key]
-        assert ids[0][key]
-    assert r["second_resolve_delta"] == 0
-    assert r["second_adapter_delta"] == 0
-    assert r["second_start_delta"] == 0
-    assert r["replay_closed"] is True
-    assert "RUNTIME_ADAPTER_NOT_READY" in (r.get("result2_preview") or "")
+    # The four ``second_*`` deltas used to be asserted here as ``in (0, None)``.
+    # MEASURED (2026-08-21, live run_all on this repo): they are ALWAYS ``None``
+    # in all three replay scenarios, because the carrier only computes them
+    # inside ``if len(tool_request_identities) >= 2`` (run_r3c_wire_e2e.py:1250)
+    # and that list is profiler-derived, hence empty under the worker-thread
+    # model. ``x in (0, None)`` against a value that is unconditionally ``None``
+    # is vacuous — it cannot fail, so it pinned nothing. Removed rather than
+    # left in place to look like coverage.
+    #
+    # Load-bearing replacement below: whole-run totals. They come from real
+    # production counters (not ``sys.setprofile``), so "the second call did not
+    # re-resolve / did not re-execute" is expressed as "across BOTH calls the
+    # credential resolved exactly once and the adapter ran exactly once".
+    _assert_replay_second_call_did_not_execute(r, adapter=adapter)
+    # C8 ERROR-CODE SPLIT (0.4.5) — load-bearing, exact code.
+    #
+    # Pre-0.4.5 collapsed every failure exit onto RUNTIME_ADAPTER_NOT_READY, so
+    # the old assertion could name any of them. C8 split them by real stage: a
+    # second call on an already-consumed reference is rejected at the
+    # reference-path guard (tool_execution.py:197/519), strictly EARLIER and more
+    # conservative than the plan-state gate.
+    #
+    # This assertion pins that exact gate on purpose. Accepting
+    # "REFERENCE_PATH_BLOCKED or PLAN_NOT_PENDING" was measured to be
+    # NON-LOAD-BEARING: disabling the reference-path guard makes the runtime fall
+    # through to PLAN_NOT_PENDING (the downstream defence still closes the
+    # replay), so a two-code assertion stays green under that mutation. Guarded
+    # by test_mutation_replay_reference_path_gate_must_red below.
+    preview = r.get("result2_preview") or ""
+    assert "REFERENCE_PATH_BLOCKED" in preview, preview[:200]
     _assert_zero_secrets(r)
     assert r["http_transport_override_calls"] == 0
     if adapter == "http":
         assert r["http_adapter_delta"] == 1
         assert r["process_start_delta"] == 0
         assert r["http_target_hits"] == 1
-        assert r["second_http_target_delta"] == 0
         assert r["default_transport_enter_count"] == 1
         assert r["http_target_evidence_layer"] == (
             "production_default_transport_loopback_tls"
@@ -657,3 +721,105 @@ def test_r3c_wire_mutation_remove_net_guard_is_red():
     )
     assert install_hits < 2
     assert "_bomb_connect" in src
+
+
+def _assert_replay_terminal_code(preview: str) -> None:
+    """Replay must be refused at the reference-path gate, by exact code.
+
+    Split out so the mutation gate below can drive it directly without
+    fabricating a full result mapping (fabricated literals are rejected by the
+    R3C false-green evidence gate).
+    """
+    assert "REFERENCE_PATH_BLOCKED" in preview, preview[:200]
+
+
+def test_mutation_replay_reference_path_gate_must_red():
+    """The replay assertion must distinguish the two replay-closing gates.
+
+    Measured fact (2026-08-21, /tmp isolated copy): with the reference-path guard
+    live, the second call is refused inside ``tool_execution.py`` and reports
+    ``REFERENCE_PATH_BLOCKED``; with that guard forced to ``if False:`` the
+    runtime falls through to the downstream plan-state gate and reports
+    ``PLAN_NOT_PENDING``. Side effects stay closed either way (defence in
+    depth) — which is exactly why an "either code" assertion is NOT
+    load-bearing: it stays green while the earlier gate is gone.
+
+    This gate feeds the mutated runtime's terminal code to the real assertion
+    helper and requires it to raise, so the distinction cannot rot away.
+    """
+    healthy_preview = json.dumps(
+        {"error": "REFERENCE_PATH_BLOCKED", "ok": False, "source": "credential-guard"}
+    )
+    mutated_preview = json.dumps(
+        {"error": "PLAN_NOT_PENDING", "ok": False, "source": "credential-guard"}
+    )
+
+    _assert_replay_terminal_code(healthy_preview)
+    with pytest.raises(AssertionError):
+        _assert_replay_terminal_code(mutated_preview)
+
+    # The live gate must still exist in production source.
+    src = (REPO / "credential_guard" / "tool_execution.py").read_text(encoding="utf-8")
+    live_gate = (
+        "if reference_path_blocked(session_id, tool_call_id) or get_invalid_marker(\n"
+        "            session_id, tool_call_id\n"
+        "        ):"
+    )
+    assert live_gate in src, "reference-path replay gate missing from tool_execution"
+
+
+def test_mutation_replay_second_call_totals_must_red(wire_results):
+    """The whole-run totals must actually distinguish open from closed replay.
+
+    Rationale for this gate: the assertions it protects REPLACED four vacuous
+    ``in (0, None)`` checks. Measured 2026-08-21 on a live ``run_all``: the
+    carrier's ``second_resolve_delta`` / ``second_adapter_delta`` /
+    ``second_start_delta`` / ``second_http_target_delta`` are ``None`` in every
+    replay scenario (they are only assigned when the profiler-derived
+    ``tool_request_identities`` list has >= 2 entries, and it has 0 under the
+    worker-thread model). Anything of the shape ``x in (0, None)`` therefore
+    could not fail. This gate exists so the replacement cannot silently rot into
+    the same non-condition.
+
+    Readings are taken from the LIVE run (never fabricated literals — the R3C
+    false-green gate rejects those), then perturbed to the "second call
+    executed" shape, which the real helper must reject.
+    """
+    counter_keys = (
+        "injection_resolve_delta",
+        "http_adapter_delta",
+        "process_start_delta",
+        "http_target_hits",
+    )
+    for adapter, scenario in (("http", "http_replay"), ("env", "env_replay")):
+        live = wire_results[scenario]
+        healthy = {k: live[k] for k in counter_keys if k in live}
+        # Sanity: the live reading really is the closed-replay shape.
+        _assert_replay_second_call_did_not_execute(healthy, adapter=adapter)
+
+        # Perturb each counter that the helper reads to the "ran twice" value.
+        watched = ["injection_resolve_delta"]
+        watched += (
+            ["http_adapter_delta", "http_target_hits"]
+            if adapter == "http"
+            else ["process_start_delta"]
+        )
+        for key in watched:
+            mutated = dict(healthy)
+            mutated[key] = int(healthy[key]) + 1
+            with pytest.raises(AssertionError):
+                _assert_replay_second_call_did_not_execute(mutated, adapter=adapter)
+
+        # And the cross-adapter counter must stay pinned at zero.
+        cross = "process_start_delta" if adapter == "http" else "http_adapter_delta"
+        mutated = dict(healthy)
+        mutated[cross] = int(healthy[cross]) + 1
+        with pytest.raises(AssertionError):
+            _assert_replay_second_call_did_not_execute(mutated, adapter=adapter)
+
+    # Guard against the regression this replaced: a vacuous membership test.
+    # Match on the ASSERT STATEMENT shape, not on a bare literal — the literal
+    # would also match this gate's own source and self-trip.
+    src = (REPO / "tests" / "test_r3c_wire_e2e.py").read_text(encoding="utf-8")
+    vacuous = re.findall(r"assert\s+r\[\"second_\w+\"\]\s+in\s+\(0,\s*None\)", src)
+    assert vacuous == [], f"vacuous replay assertions came back: {vacuous}"

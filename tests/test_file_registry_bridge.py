@@ -273,16 +273,15 @@ def test_t3_tool_result_text_and_json_use_file_snapshot(isolated_hermes_home):
         isolated_hermes_home, document=_v2_userpass(cred_id, canary)
     )
     assert get_registry().values() == []
-    # Tool-result reflux uses <CREDENTIAL:name>; registry internal token stays <SECRET:...>.
-    credential_ref = f"<CREDENTIAL:{cred_id}>"
+    # C9: tool-result reflux uses the same registry token as llm_request.
     secret_token = f"<SECRET:{make_token_id(cred_id, 'password')}>"
 
     text_out = on_transform_tool_result(
         result=f"found {canary} in output", tool_name="terminal", arguments={}
     )
     assert canary not in text_out
-    assert credential_ref in text_out
-    assert secret_token not in text_out
+    assert secret_token in text_out
+    assert f"<CREDENTIAL:{cred_id}>" not in text_out
 
     json_out = on_transform_tool_result(
         result=json.dumps({"password": canary}, ensure_ascii=False),
@@ -291,7 +290,7 @@ def test_t3_tool_result_text_and_json_use_file_snapshot(isolated_hermes_home):
     )
     assert canary not in json_out
     parsed = json.loads(json_out)
-    assert parsed["password"] == credential_ref
+    assert parsed["password"] == secret_token
 
 
 def test_t3_tool_result_snapshot_failure_returns_safe_json(isolated_hermes_home):
@@ -315,8 +314,8 @@ def test_t3_tool_result_snapshot_failure_returns_safe_json(isolated_hermes_home)
         json.loads(out)
 
 
-def test_t3_tool_result_mutation_secret_token_on_reflux_is_red(isolated_hermes_home):
-    """Mutation: tool reflux must not keep registry <SECRET:cg_...> contract."""
+def test_t3_tool_result_uses_registry_secret_token(isolated_hermes_home):
+    """C9: tool reflux must use registry <SECRET:cg_...> (not usable <CREDENTIAL:name>)."""
     from credential_guard.hooks import on_transform_tool_result
 
     canary = _runtime_canary()
@@ -328,8 +327,8 @@ def test_t3_tool_result_mutation_secret_token_on_reflux_is_red(isolated_hermes_h
     text_out = on_transform_tool_result(
         result=f"found {canary} in output", tool_name="terminal", arguments={}
     )
-    assert f"<CREDENTIAL:{cred_id}>" in text_out
-    assert secret_token not in text_out
+    assert secret_token in text_out
+    assert f"<CREDENTIAL:{cred_id}>" not in text_out
 
 
 def test_t4_llm_request_redacts_file_canary_without_mutating_original(

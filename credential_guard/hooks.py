@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
 from . import result_guard as result_guard_mod
+from .local_events import submit_transform_fail_closed
+from .middleware import (
+    emit_config_failure_diagnostic,
+    emit_unconfigured_notice,
+)
+from .runtime_config import RuntimeConfigError, is_unconfigured_store_error
 from .sensitive_paths import (
     args_target_protected,
     python_code_reads_protected,
     terminal_command_reads_protected,
 )
-from .state import get_egress_registry_snapshot
-
-logger = logging.getLogger("credential_guard")
+from .state import get_base_registry_snapshot, get_egress_registry_snapshot
 
 # Protected-path / terminal pre-block (not R4 result-guard product semantics).
 _SAFE_TOOL_RESULT = json.dumps(
@@ -52,12 +55,20 @@ def on_transform_tool_result(**kwargs: Any) -> str:
                 if command and terminal_command_reads_protected(command):
                     return _SAFE_TOOL_RESULT
 
-        registry = get_egress_registry_snapshot()
+        try:
+            registry = get_egress_registry_snapshot()
+        except RuntimeConfigError as exc:
+            # Round 6 withdrew C1 pass-through (see
+            # middleware._unconfigured_registry_or_block): a missing
+            # configuration no longer means "never configured", because the
+            # store location used to be guessed and could simply be wrong.
+            # Every config failure now fails closed via the outer handler,
+            # which returns RESULT_GUARD_FAIL_TEXT.
+            emit_config_failure_diagnostic(exc)
+            raise
         return result_guard_mod.guard_tool_result(result, registry)
     except Exception:
         # Never log exception objects — they may embed decoy/secret text.
-        logger.warning(
-            "credential-guard failed closed at transform_tool_result reason=%s",
-            result_guard_mod.RESULT_GUARD_FAIL_REASON,
-        )
+        # Non-blocking fixed event; worker may block on lastResort/stderr.
+        submit_transform_fail_closed()
         return result_guard_mod.RESULT_GUARD_FAIL_TEXT

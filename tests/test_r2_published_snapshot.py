@@ -26,7 +26,7 @@ from credential_guard.runtime_config import (
     reset_execution_secret_resolve_count_for_tests,
     reset_runtime_for_tests,
 )
-from credential_guard.tool_execution import RUNTIME_ADAPTER_NOT_READY, on_tool_execution
+from credential_guard.tool_execution import PLAN_RECHECK_FAILED, on_tool_execution
 from credential_guard.reference_tools import handle_http_credential_request
 from credential_guard.tool_request import (
     get_invalid_marker,
@@ -345,7 +345,7 @@ def test_red_lstat_allowed_and_identity_mismatch_blocks(
         tool_call_id="tc-snap-lstat",
     )
     assert len(calls) <= 1
-    assert RUNTIME_ADAPTER_NOT_READY in out
+    assert PLAN_RECHECK_FAILED in out
     assert hits == []
     assert lstat_calls["n"] >= 1
     plan = get_plan_store().lookup("s1", "tc-snap-lstat")
@@ -414,7 +414,7 @@ def test_red_lstat_to_consume_race_must_invalidate(published_env, monkeypatch):
         tool_call_id="tc-snap-race",
     )
     assert len(calls_out) <= 1
-    assert RUNTIME_ADAPTER_NOT_READY in out
+    assert PLAN_RECHECK_FAILED in out
     assert hits == []
     plan = get_plan_store().lookup("s1", "tc-snap-race")
     assert plan is not None
@@ -530,7 +530,7 @@ def test_red_cross_turn_replay_blocked(published_env):
         tool_call_id="tc-xturn",
     )
     assert len(calls) <= 1
-    assert RUNTIME_ADAPTER_NOT_READY in out
+    assert PLAN_RECHECK_FAILED in out
     plan = get_plan_store().lookup("s1", "tc-xturn")
     assert plan is not None
     assert plan.state is PlanState.INVALIDATED

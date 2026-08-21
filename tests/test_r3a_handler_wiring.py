@@ -23,7 +23,7 @@ from credential_guard.runtime_config import (
 )
 from credential_guard import runtime_config as rc
 from credential_guard.tool_execution import (
-    RUNTIME_ADAPTER_NOT_READY,
+    PLAN_NOT_PENDING,
     get_http_adapter_invoke_count,
     on_tool_execution,
     reset_http_adapter_observe_for_tests,
@@ -173,7 +173,7 @@ def test_a4_approve_resolves_and_runs_adapter_once(env):
     data = json.loads(out)
     assert data["ok"] is True
     assert data["status"] == 201
-    assert RUNTIME_ADAPTER_NOT_READY not in out
+    assert PLAN_NOT_PENDING not in out
     assert rc.get_injection_secret_resolve_count() == 1
     assert get_http_adapter_invoke_count() == 1
     assert len(captured) == 1

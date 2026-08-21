@@ -17,8 +17,13 @@ from typing import Any, Dict, Mapping, Optional, Tuple, Union
 
 from .bindings import PROCESS_REFERENCE_ARG_PATH, PROCESS_REFERENCE_TOOL
 from .config import CONFIG_FILENAME, ConfigError, CredentialGuardConfig
-from .config_lock import ConfigLockError, shared_config_lock
+from .config_lock import (
+    CONFIG_LOCK_STORE_NOT_FOUND,
+    ConfigLockError,
+    shared_config_lock,
+)
 from .registry import CredentialRegistry
+from . import store_location
 
 PathLike = Union[str, Path]
 
@@ -79,24 +84,68 @@ def reset_injection_secret_resolve_count_for_tests() -> None:
         _INJECTION_SECRET_RESOLVE_COUNT = 0
 
 
+# Distinct runtime code for "the secure store directory does not exist", kept
+# separate from RUNTIME_CONFIG_NOT_FOUND ("directory present, config file
+# absent"). Guard seams key their pass-through on this code alone; the merged
+# NOT_FOUND arch stays fail-closed because a present directory means the
+# operator already ran migrate/CLI and may hold real credentials.
+RUNTIME_CONFIG_STORE_NOT_FOUND = "RUNTIME_CONFIG_STORE_NOT_FOUND"
+
+
 class RuntimeConfigError(Exception):
     """Fail-closed runtime config error. Never embed secrets, hosts, or paths."""
 
-    __slots__ = ("code",)
+    __slots__ = ("code", "detail_code", "location")
 
-    def __init__(self, code: str, message: str = "configuration error") -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str = "configuration error",
+        detail_code: str = "",
+        *,
+        location: str = "",
+    ) -> None:
+        from .config import DIAG_LOCATION_FALLBACK, normalize_safe_diag_location
+
         object.__setattr__(self, "code", code)
+        # Underlying ConfigError / ConfigLockError code, for local-only
+        # diagnostics. Codes are fixed identifiers from this package -- never
+        # user data, never a path, never secret material.
+        object.__setattr__(self, "detail_code", detail_code)
+        # Structured safe location (credentials./bindings. …). Not in str/repr.
+        object.__setattr__(
+            self,
+            "location",
+            normalize_safe_diag_location(location)
+            if location
+            else DIAG_LOCATION_FALLBACK,
+        )
         super().__init__(message)
 
     def __repr__(self) -> str:
         return f"RuntimeConfigError(code={self.code!r})"
 
 
+def is_unconfigured_store_error(exc: BaseException) -> bool:
+    """True only for "Credential Guard was never configured on this machine".
+
+    Deliberately narrow: it is the absence of the store directory itself, not
+    the absence of the config file inside it. See RUNTIME_CONFIG_STORE_NOT_FOUND.
+    """
+    return (
+        isinstance(exc, RuntimeConfigError)
+        and getattr(exc, "code", "") == RUNTIME_CONFIG_STORE_NOT_FOUND
+    )
+
+
 def _store_dir() -> Path:
-    hermes = os.environ.get("HERMES_HOME", "").strip()
-    if hermes:
-        return Path(hermes) / "credential-guard"
-    return Path.home() / ".hermes" / "credential-guard"
+    """The one configuration directory, derived from the install layout.
+
+    Delegates to :mod:`credential_guard.store_location`; this module keeps no
+    private copy of the lookup. See that module for why the former
+    ``$HERMES_HOME`` guess was removed.
+    """
+    return store_location.resolve_store_dir()
 
 
 def default_config_path() -> Path:
@@ -105,8 +154,11 @@ def default_config_path() -> Path:
 
 def _map_config_error(exc: ConfigError) -> RuntimeConfigError:
     code = getattr(exc, "code", "") or ""
+    location = getattr(exc, "location", "") or ""
     if code == "CONFIG_NOT_FOUND":
-        return RuntimeConfigError("RUNTIME_CONFIG_NOT_FOUND")
+        return RuntimeConfigError(
+            "RUNTIME_CONFIG_NOT_FOUND", detail_code=code, location=location
+        )
     if code in {
         "CONFIG_SCHEMA",
         "CONFIG_INVALID_JSON",
@@ -115,8 +167,21 @@ def _map_config_error(exc: ConfigError) -> RuntimeConfigError:
         "CONFIG_TOO_LARGE",
         "CONFIG_NOT_FILE",
     }:
-        return RuntimeConfigError("RUNTIME_CONFIG_INVALID")
-    return RuntimeConfigError("RUNTIME_CONFIG_UNAVAILABLE")
+        return RuntimeConfigError(
+            "RUNTIME_CONFIG_INVALID", detail_code=code, location=location
+        )
+    # Fail-closed fallback. Must stay UNAVAILABLE: relaxing it to either
+    # NOT_FOUND arch would turn every unknown fault into "never configured".
+    return RuntimeConfigError(
+        "RUNTIME_CONFIG_UNAVAILABLE", detail_code=code, location=location
+    )
+
+
+def _map_config_lock_error(exc: ConfigLockError) -> RuntimeConfigError:
+    code = getattr(exc, "code", "") or ""
+    if code == CONFIG_LOCK_STORE_NOT_FOUND:
+        return RuntimeConfigError(RUNTIME_CONFIG_STORE_NOT_FOUND, detail_code=code)
+    return RuntimeConfigError("RUNTIME_CONFIG_UNAVAILABLE", detail_code=code)
 
 
 def _stable_digest(payload: Mapping[str, Any]) -> str:
@@ -416,7 +481,7 @@ def load_and_publish_runtime(path=None) -> RuntimeView:
             return _publish(view)
     except ConfigLockError as exc:
         mark_runtime_unavailable()
-        raise RuntimeConfigError("RUNTIME_CONFIG_UNAVAILABLE") from exc
+        raise _map_config_lock_error(exc) from exc
     except RuntimeConfigError:
         mark_runtime_unavailable()
         raise
@@ -442,18 +507,10 @@ def ensure_published_from_disk(path=None) -> RuntimeView:
     return load_and_publish_runtime(path)
 
 
-def require_runtime_adapter(binding_name: str) -> None:
-    """R1B: adapters are metadata-only; execution paths fail closed."""
-    view = get_runtime_view()
-    if binding_name not in view.bindings:
-        raise RuntimeConfigError("RUNTIME_CONFIG_UNAVAILABLE")
-    # http / process_env / stdin injection not implemented until R3+.
-    raise RuntimeConfigError("RUNTIME_ADAPTER_NOT_READY")
-
-
 __all__ = [
     "HTTP_REFERENCE_ARG_PATH",
     "HTTP_REFERENCE_TOOL",
+    "RUNTIME_CONFIG_STORE_NOT_FOUND",
     "RuntimeConfigError",
     "RuntimeView",
     "build_file_egress_registry",
@@ -464,13 +521,13 @@ __all__ = [
     "get_execution_secret_resolve_count",
     "get_injection_secret_resolve_count",
     "get_runtime_view",
+    "is_unconfigured_store_error",
     "load_and_publish_runtime",
     "load_config",
     "mark_runtime_unavailable",
     "note_execution_secret_resolve",
     "note_injection_secret_resolve",
     "reload_runtime",
-    "require_runtime_adapter",
     "reset_execution_secret_resolve_count_for_tests",
     "reset_injection_secret_resolve_count_for_tests",
     "reset_runtime_for_tests",

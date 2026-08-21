@@ -26,7 +26,7 @@ from credential_guard.runtime_config import (
     reset_execution_secret_resolve_count_for_tests,
     reset_runtime_for_tests,
 )
-from credential_guard.tool_execution import RUNTIME_ADAPTER_NOT_READY, on_tool_execution
+from credential_guard.tool_execution import on_tool_execution
 from credential_guard.reference_tools import handle_http_credential_request
 from credential_guard.tool_request import (
     get_plan_store,

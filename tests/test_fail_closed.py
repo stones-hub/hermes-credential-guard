@@ -169,6 +169,8 @@ def test_tool_hook_result_guard_mutation_old_json_error_is_red(monkeypatch):
 def test_fail_closed_logging_never_includes_decoy(caplog, monkeypatch):
     import logging
 
+    from credential_guard.local_events import wait_fail_closed_idle_for_tests
+
     get_registry().register("db", "password", DECOY)
     caplog.set_level(logging.WARNING, logger="credential_guard")
 
@@ -181,6 +183,7 @@ def test_fail_closed_logging_never_includes_decoy(caplog, monkeypatch):
         request={"messages": [{"content": DECOY}]},
         next_call=lambda r: r,
     )
+    assert wait_fail_closed_idle_for_tests(timeout=2.0)
     joined = "\n".join(r.message for r in caplog.records)
     assert DECOY not in joined
     assert "failed closed" in joined

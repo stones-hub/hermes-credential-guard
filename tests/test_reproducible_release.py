@@ -551,9 +551,10 @@ _DESIGNATED_REPORTS = {
     "0.4.2": "docs/R8-0.4.2-验收报告.md",
     "0.4.3": "docs/R9-0.4.3-验收报告.md",
     "0.4.4": "docs/R10-0.4.4-验收报告.md",
+    "0.4.5": "docs/R11-0.4.5-验收报告.md",
 }
 
-# Strict stage: True after dual-build copy2 lands 0.4.4 artifacts + hashes.
+# Strict stage: False until main-agent dual-build lands 0.4.5 artifacts + hashes.
 ARTIFACTS_LANDED_FOR_CURRENT = True
 STRICT_PENDING = True
 
@@ -591,20 +592,20 @@ def test_k2_docs_final_plugin_zip_hash_matches_manifest_when_present():
         assert "源码候选" in text
         assert "待主代理构建" in text
         assert _parse_plugin_zip_hash_for_version(text, PLUGIN_VERSION) is None, (
-            "pending 0.4.4 report must not invent plugin zip hashes"
+            "pending 0.4.5 report must not invent plugin zip hashes"
         )
         manifest_path = artifact_manifest_path(ROOT)
         assert not manifest_path.is_file(), (
-            f"R10_044_ARTIFACTS_PENDING_BUILD: unexpected {ARTIFACT_MANIFEST_FILENAME}"
+            f"R11_045_ARTIFACTS_PENDING_BUILD: unexpected {ARTIFACT_MANIFEST_FILENAME}"
         )
-        # Historical 0.4.3 designated report remains hash-bound.
-        hist = _designated_report_for_version("0.4.3")
+        # Historical 0.4.4 designated report remains hash-bound.
+        hist = _designated_report_for_version("0.4.4")
         hist_parsed = _parse_plugin_zip_hash_for_version(
-            hist.read_text(encoding="utf-8"), "0.4.3"
+            hist.read_text(encoding="utf-8"), "0.4.4"
         )
         assert hist_parsed is not None
         assert hist_parsed[1] == (
-            "738bc8ae4e1973a50efba604602a9fb3c7a6739efb95e48024b6a1975e97dacb"
+            "d6ee2bf6a92a4ca55ee37f24802cf26316ab38adcbe27b9d59a4ee9e944ae265"
         )
         return
 
@@ -672,17 +673,17 @@ def test_k2_wrong_current_report_hash_must_fail(monkeypatch, tmp_path):
     )
     if not ARTIFACTS_LANDED_FOR_CURRENT:
         # Pending phase: inventing a current-version hash must not bind a
-        # non-existent 0.4.4 manifest; historical 0.4.3 still drifts correctly.
+        # non-existent 0.4.5 manifest; historical 0.4.4 still drifts correctly.
         fake_hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         text = (
-            "| plugin zip | `credential-guard-0.4.3-hermes-plugin.zip` "
+            "| plugin zip | `credential-guard-0.4.4-hermes-plugin.zip` "
             f"| `{fake_hash}` |\n"
         )
-        parsed = _parse_plugin_zip_hash_for_version(text, "0.4.3")
+        parsed = _parse_plugin_zip_hash_for_version(text, "0.4.4")
         assert parsed is not None
-        man_043 = ROOT / "dist" / "artifact-manifest-0.4.3.json"
-        assert man_043.is_file()
-        man = json.loads(man_043.read_text(encoding="utf-8"))
+        man_044 = ROOT / "dist" / "artifact-manifest-0.4.4.json"
+        assert man_044.is_file()
+        man = json.loads(man_044.read_text(encoding="utf-8"))
         assert parsed[1] != man["plugin_zip"]["sha256"]
         return
     # Simulate wrong hash in an isolated copy of the selection logic.

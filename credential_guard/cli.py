@@ -49,27 +49,99 @@ _EXPECTED_CALLBACKS = {
 }
 
 
+VALIDATE_HELP = (
+    "Offline read-only validation of credential-guard.json "
+    "(no RuntimeView publish, no sidecar write, no Provider/adapter)"
+)
+
+
 def setup_parser(subparser: Any) -> None:
     subs = subparser.add_subparsers(dest="credential_guard_command")
     check = subs.add_parser("check", help=CHECK_HELP)
     check.set_defaults(func=handle_command)
-    migrate = subs.add_parser(
-        "migrate-config",
-        help="Migrate credentials.json+targets.json to credential-guard.json",
+    refresh = subs.add_parser(
+        "refresh-targets",
+        help="Regenerate credential-guard.targets.json from credential-guard.json",
     )
-    migrate.set_defaults(func=handle_command)
+    refresh.set_defaults(func=handle_command)
+    validate = subs.add_parser("validate", help=VALIDATE_HELP)
+    validate.add_argument(
+        "file",
+        nargs="?",
+        default=None,
+        help="Config file to validate (default: Profile credential-guard.json)",
+    )
+    validate.set_defaults(func=handle_command)
 
 
 def handle_command(args: Any) -> int:
     cmd = getattr(args, "credential_guard_command", "")
     if cmd == "check":
         return run_check()
-    if cmd == "migrate-config":
-        from .migration import run_migrate_config
+    if cmd == "refresh-targets":
+        from .target_catalog import run_refresh_targets
 
-        return run_migrate_config()
-    print("usage: hermes credential-guard check|migrate-config")
+        return run_refresh_targets()
+    if cmd == "validate":
+        return run_validate(getattr(args, "file", None))
+    print(
+        "usage: hermes credential-guard "
+        "check|refresh-targets|validate"
+    )
     return 1
+
+
+def _safe_location(name: Any) -> str:
+    """Return a NAME_RE-safe identifier, else the fail-closed fallback."""
+    from .config import NAME_RE
+
+    if isinstance(name, str) and NAME_RE.fullmatch(name):
+        return name
+    return "configuration"
+
+
+def run_validate(path: Any = None) -> int:
+    """Offline read-only Schema v2 validation. Never publishes or writes.
+
+    Explicit ``path`` reads only that file; ``None`` uses ``default_config_path()``.
+    Does not require a live RuntimeView, does not generate the target catalog
+    sidecar, and does not call Provider/adapters. stdout carries only PASS/FAIL
+    lines with fixed codes and safe locations — never secrets, hosts, programs,
+    paths, JSON bodies, or exception text.
+    """
+    from pathlib import Path
+
+    from .config import ConfigError, CredentialGuardConfig
+    from .runtime_config import default_config_path
+
+    target = Path(path) if path is not None else default_config_path()
+    try:
+        cfg = CredentialGuardConfig.load(target)
+    except ConfigError as exc:
+        code = getattr(exc, "code", None) or "CONFIG_UNAVAILABLE"
+        if not isinstance(code, str) or not code:
+            code = "CONFIG_UNAVAILABLE"
+        print(f"FAIL {code} configuration")
+        return 1
+    except Exception:
+        print("FAIL CONFIG_UNAVAILABLE configuration")
+        return 1
+
+    # Names only from the successfully parsed canonical structure.
+    for name in cfg.credentials:
+        safe = _safe_location(name)
+        if safe == "configuration":
+            print("FAIL CONFIG_SCHEMA configuration")
+            return 1
+        print(f"PASS credential {safe}")
+    for name in cfg.bindings:
+        safe = _safe_location(name)
+        if safe == "configuration":
+            print("FAIL CONFIG_SCHEMA configuration")
+            return 1
+        print(f"PASS binding {safe}")
+    print("VALID")
+    return 0
 
 
 def run_check() -> int:

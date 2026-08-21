@@ -254,6 +254,6 @@ def test_r0_host_surfaces_unchanged_paths():
     # R2 production manifest must declare both tool middlewares.
     assert "tool_request" in text
     assert "tool_execution" in text
-    assert "0.4.4" in text
-    # R10: current product version 0.4.4 (historical 0.4.2/0.4.3 artifacts retained in dist/).
-    assert "version: 0.4.4" in text
+    assert "0.4.5" in text
+    # R11: current product version 0.4.5 (historical 0.4.2/0.4.3/0.4.4 artifacts retained in dist/).
+    assert "version: 0.4.5" in text

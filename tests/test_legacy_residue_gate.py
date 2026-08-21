@@ -160,6 +160,17 @@ _EXPLAINED_RESIDUE_PATHS = {
     "tests/test_tool_request_analysis.py",
     "tests/test_config_migration.py",
     "tests/test_target_catalog_boundary.py",
+    # C1/C2 zero-config regressions: the reverse scenario must plant the legacy
+    # dual files to prove they still block, and its _write helper takes a
+    # dynamic path — both are surviving-class by design, not residue.
+    "tests/test_c1c2_zero_config_usability.py",
+    # C5 usability: plants synthetic credential-guard.json fixtures only.
+    "tests/test_c5c7_usability.py",
+    # C5 safe target catalog sidecar (filename contains targets.json substring
+    # but is credential-guard.targets.json — not the retired dual-file runtime).
+    "credential_guard/target_catalog.py",
+    # C5 safe target catalog sidecar tests (synthetic fixtures + migration pair).
+    "tests/test_c5_target_catalog.py",
 }
 
 

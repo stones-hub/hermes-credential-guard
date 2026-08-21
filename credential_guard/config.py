@@ -28,14 +28,114 @@ _TOKEN_FIELDS = frozenset({"type", "value"})
 _USERPASS_FIELDS = frozenset({"type", "username", "password"})
 _TOP_FIELDS = frozenset({"version", "credentials", "bindings"})
 
+# C2 local diagnostic location: only credentials./bindings. + safe id + whitelist.
+DIAG_LOCATION_FALLBACK = "configuration"
+MAX_DIAG_LOCATION_LEN = 256
+_SAFE_DIAG_IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+SAFE_DIAG_FIELD_SEGMENTS = frozenset(
+    {
+        "version",
+        "type",
+        "value",
+        "username",
+        "password",
+        "credential_ref",
+        "target",
+        "request",
+        "inject",
+        "approval",
+        "allowed_methods",
+        "allowed_paths",
+        "scheme",
+        "host",
+        "port",
+        "program",
+        "argv",
+        "env_name",
+        "header_name",
+        "location",
+        "stdin_format",
+        "timeout_seconds",
+        "max_stdout_bytes",
+        "max_stderr_bytes",
+        "connect_timeout_seconds",
+        "total_timeout_seconds",
+        "max_response_body_bytes",
+    }
+)
+
+
+def normalize_safe_diag_location(raw: Any) -> str:
+    """Return a scrubbed diagnostic location or ``configuration``.
+
+    Allowed shapes only:
+    ``credentials.<SAFE_IDENTIFIER>[.<whitelist_field>...]``
+    ``bindings.<SAFE_IDENTIFIER>[.<whitelist_field>...]``
+
+    Never retains values, host/path/program/env/header contents, exception
+    bodies, or arbitrary JSON. Any illegal segment, control character, or
+    oversize input collapses the entire location to the fallback.
+    """
+    if not isinstance(raw, str) or not raw:
+        return DIAG_LOCATION_FALLBACK
+    if len(raw) > MAX_DIAG_LOCATION_LEN:
+        return DIAG_LOCATION_FALLBACK
+    if any(ord(ch) < 32 or ord(ch) == 0x7F for ch in raw):
+        return DIAG_LOCATION_FALLBACK
+    if ".." in raw or raw.startswith(".") or raw.endswith("."):
+        return DIAG_LOCATION_FALLBACK
+    parts = raw.split(".")
+    if len(parts) < 2:
+        return DIAG_LOCATION_FALLBACK
+    root = parts[0]
+    ident = parts[1]
+    if root not in ("credentials", "bindings"):
+        return DIAG_LOCATION_FALLBACK
+    if _SAFE_DIAG_IDENTIFIER_RE.fullmatch(ident) is None:
+        return DIAG_LOCATION_FALLBACK
+    for seg in parts[2:]:
+        if seg not in SAFE_DIAG_FIELD_SEGMENTS:
+            return DIAG_LOCATION_FALLBACK
+    out = ".".join(parts)
+    if len(out) > MAX_DIAG_LOCATION_LEN:
+        return DIAG_LOCATION_FALLBACK
+    return out
+
+
+def safe_diag_location(*segments: Any) -> str:
+    """Join path segments then normalize. Empty / unsafe → ``configuration``."""
+    parts: list[str] = []
+    for seg in segments:
+        if not isinstance(seg, str) or not seg:
+            return DIAG_LOCATION_FALLBACK
+        parts.append(seg)
+    if not parts:
+        return DIAG_LOCATION_FALLBACK
+    return normalize_safe_diag_location(".".join(parts))
+
 
 class ConfigError(Exception):
     """Fail-closed config error. Never embed secrets, hosts, or paths."""
 
-    __slots__ = ("code",)
+    __slots__ = ("code", "location")
 
-    def __init__(self, code: str, message: str = "configuration error") -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str = "configuration error",
+        *,
+        location: str = "",
+    ) -> None:
         object.__setattr__(self, "code", code)
+        # Structured safe location for local diagnostics only. Never part of
+        # str/repr — those stay the fixed message so logs cannot echo paths.
+        object.__setattr__(
+            self,
+            "location",
+            normalize_safe_diag_location(location)
+            if location
+            else DIAG_LOCATION_FALLBACK,
+        )
         super().__init__(message)
 
     def __repr__(self) -> str:
@@ -105,32 +205,50 @@ def _validate_secret_string(value: Any, *, allow_short: bool = False) -> str:
 
 
 def _validate_credential(name: str, entry: Any) -> Dict[str, Any]:
-    _validate_name(name)
-    if not isinstance(entry, dict):
+    base = safe_diag_location("credentials", name)
+    if not isinstance(name, str) or not NAME_RE.fullmatch(name):
         raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+    if not isinstance(entry, dict):
+        raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=base)
     ctype = entry.get("type")
     if ctype not in ALLOWED_CREDENTIAL_TYPES:
-        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+        raise ConfigError(
+            "CONFIG_SCHEMA",
+            "invalid configuration",
+            location=safe_diag_location("credentials", name, "type"),
+        )
     if ctype == "token":
         if set(entry) != _TOKEN_FIELDS:
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=base)
         return {"type": "token", "value": _validate_secret_string(entry["value"])}
     if ctype == "username_password":
         if set(entry) != _USERPASS_FIELDS:
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=base)
         username = entry["username"]
         if not isinstance(username, str) or not username:
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location("credentials", name, "username"),
+            )
         if any(ord(ch) < 32 for ch in username):
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location("credentials", name, "username"),
+            )
         if len(username) > MAX_SECRET_LENGTH:
-            raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+            raise ConfigError(
+                "CONFIG_SCHEMA",
+                "invalid configuration",
+                location=safe_diag_location("credentials", name, "username"),
+            )
         return {
             "type": "username_password",
             "username": username,
             "password": _validate_secret_string(entry["password"]),
         }
-    raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+    raise ConfigError("CONFIG_SCHEMA", "invalid configuration", location=base)
 
 
 def parse_config_document(data: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -169,6 +287,9 @@ def parse_config_document(data: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
                 raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
             seen_secrets[secret] = name
 
+    # Names must never equal any registered token/password plaintext.
+    _reject_names_overlapping_secrets(credentials.keys(), seen_secrets)
+
     bindings: Dict[str, Any] = {}
     for name, entry in bind_raw.items():
         if not isinstance(name, str):
@@ -178,7 +299,54 @@ def parse_config_document(data: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
             raise ConfigError("CONFIG_DUPLICATE_KEY", "configuration error")
         bindings[name] = validate_binding(name, entry, credentials)
 
+    _reject_names_overlapping_secrets(bindings.keys(), seen_secrets)
+    _reject_visible_strings_overlapping_secrets(bindings, seen_secrets)
+
     return credentials, bindings
+
+
+def _reject_names_overlapping_secrets(names: Any, seen_secrets: Dict[str, str]) -> None:
+    """Fail-closed if any credential/binding name equals a registered secret."""
+    if set(names) & set(seen_secrets.keys()):
+        raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
+
+
+def _reject_visible_strings_overlapping_secrets(
+    bindings: Mapping[str, Any], seen_secrets: Dict[str, str]
+) -> None:
+    """Fail-closed if any token/password is a substring of model-visible fields.
+
+    Model-visible (sidecar / tool description) strings: binding names, referenced
+    credential names, HTTP allowed_methods, HTTP allowed_paths. Does not scan
+    host/program or other non-model fields. Never embeds secret values in errors.
+    """
+    if not seen_secrets:
+        return
+    secrets = tuple(seen_secrets.keys())
+    visible: list[str] = []
+    for name, entry in bindings.items():
+        if isinstance(name, str):
+            visible.append(name)
+        if not isinstance(entry, Mapping):
+            continue
+        ref = entry.get("credential_ref")
+        if isinstance(ref, str):
+            visible.append(ref)
+        if entry.get("type") != "http":
+            continue
+        req = entry.get("request") or {}
+        if not isinstance(req, Mapping):
+            continue
+        for item in req.get("allowed_methods") or ():
+            if isinstance(item, str):
+                visible.append(item)
+        for item in req.get("allowed_paths") or ():
+            if isinstance(item, str):
+                visible.append(item)
+    for text in visible:
+        for secret in secrets:
+            if secret and secret in text:
+                raise ConfigError("CONFIG_SCHEMA", "invalid configuration")
 
 
 def _assert_secure_parent_dir(path: Path) -> None:
@@ -413,10 +581,15 @@ def _unfreeze(obj: Any) -> Any:
 
 __all__ = [
     "CONFIG_FILENAME",
+    "DIAG_LOCATION_FALLBACK",
     "MAX_CONFIG_FILE_BYTES",
+    "MAX_DIAG_LOCATION_LEN",
     "NAME_RE",
+    "SAFE_DIAG_FIELD_SEGMENTS",
     "SUPPORTED_VERSION",
     "ConfigError",
     "CredentialGuardConfig",
+    "normalize_safe_diag_location",
     "parse_config_document",
+    "safe_diag_location",
 ]

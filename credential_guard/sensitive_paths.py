@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set
 from urllib.parse import unquote, unquote_plus
 
+from . import store_location
+
 # PEM private-key markers (case-insensitive). Certificates are excluded.
 _PRIVATE_KEY_BEGIN = re.compile(
     r"-----BEGIN[^\n-]{0,80}PRIVATE KEY-----",
@@ -303,10 +305,13 @@ def _home_ssh_dir() -> Path:
 
 
 def _store_dir() -> Path:
-    hermes = os.environ.get("HERMES_HOME", "").strip()
-    if hermes:
-        return Path(hermes) / "credential-guard"
-    return Path.home() / ".hermes" / "credential-guard"
+    """The one configuration directory, derived from the install layout.
+
+    Delegates to :mod:`credential_guard.store_location`; this module keeps no
+    private copy of the lookup. See that module for why the former
+    ``$HERMES_HOME`` guess was removed.
+    """
+    return store_location.resolve_store_dir()
 
 
 def _safe_realpath(path: Path) -> Optional[Path]:
@@ -449,21 +454,47 @@ def _store_basename_is_protected(name: str) -> bool:
     return False
 
 
+def _store_dir_or_none() -> Optional[Path]:
+    """The store directory, or ``None`` when it cannot be derived.
+
+    Path protection must keep working even where the store location is
+    unknown (a source checkout, an odd install layout). Callers fall back to
+    name-based rules, which are strictly more permissive about *what* they
+    protect and never less -- an underivable root must not silently unprotect
+    a file.
+    """
+    try:
+        return store_location.resolve_store_dir()
+    except store_location.StoreLocationError:
+        return None
+
+
 def _store_file_is_protected(path: Path) -> bool:
     """Protect Credential Guard unified config, legacy dual files, and migrate artifacts."""
-    store = _store_dir()
+    store = _store_dir_or_none()
     try:
         name = path.name
         check = path
         if not _store_basename_is_protected(name):
             real = _safe_realpath(path)
             if real is None or not _store_basename_is_protected(real.name):
+                if store is None:
+                    # Root underivable: fall back to name-based rules only.
+                    # We cannot say a path is *outside* a store we cannot
+                    # locate, so we simply do not claim it here; the caller's
+                    # remaining rules still apply.
+                    return False
                 # Any path under the store directory is treated as sensitive.
                 if _is_under(path, store) or _is_under(real or path, store):
                     return True
                 return False
             check = real
             name = real.name
+        if store is None:
+            # The basename alone marks this as a credential-guard artifact
+            # (config, legacy dual file, migrate residue), so protect it even
+            # without a derivable root -- fail closed, never open.
+            return True
         expected = store / name
         expected_real = _safe_realpath(expected) or expected
         path_real = _safe_realpath(check) or check
@@ -508,7 +539,10 @@ def search_path_is_protected(raw_path: str) -> bool:
     except Exception:
         return True
     ssh = _home_ssh_dir()
-    store = _store_dir()
+    # The store may be underivable (source checkout, unusual layout). That must
+    # not crash the guard: an exception escaping here means no protection at
+    # all. Fall back to the ssh/home rules below, which still apply.
+    store = _store_dir_or_none()
 
     # Searching the protected path itself or anything under it.
     if path_is_protected(str(root)):
@@ -528,10 +562,11 @@ def search_path_is_protected(raw_path: str) -> bool:
             return True
         if _path_looks_like_ssh_child(root, ssh):
             return True
-        if store.exists() and _is_under(store, root):
-            return True
-        if root == store or _is_under(root, store):
-            return True
+        if store is not None:
+            if store.exists() and _is_under(store, root):
+                return True
+            if root == store or _is_under(root, store):
+                return True
     except OSError:
         return True
     return False

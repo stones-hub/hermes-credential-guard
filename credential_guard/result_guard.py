@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import List, Optional, Sequence, Tuple
 
 from . import redactor as redactor_mod
+from .local_events import submit_result_guard_fail_closed
+from .models import make_token_id
 from .redactor import VariantBuildError, build_secret_variants
 from .registry import CredentialRegistry
 from .sensitive_paths import contains_private_key_material
-
-logger = logging.getLogger("credential_guard")
 
 RESULT_GUARD_FAIL_TEXT = (
     "工具可能已经执行，但返回内容未通过安全检查，原始结果未返回。"
@@ -30,7 +29,8 @@ _AUTH_HEADER_RE = re.compile(
 _COOKIE_HEADER_RE = re.compile(
     r"(?im)^((?:Set-)?Cookie)([ \t]*:[ \t]*)(.+)$"
 )
-_CREDENTIAL_PLACEHOLDER_RE = re.compile(r"<CREDENTIAL:([^>\n]+)>")
+# Conservative registry token form (same as egress redact_payload).
+_SECRET_PLACEHOLDER_RE = re.compile(r"<SECRET:cg_[0-9a-f]{16}>")
 
 # Explicit high-confidence field names only (bounded; not a DLP engine).
 _SENSITIVE_FIELD_NAMES = frozenset({"password", "token", "secret"})
@@ -39,9 +39,10 @@ _SENSITIVE_FIELD_NAMES = frozenset({"password", "token", "secret"})
 _JSON_SENSITIVE_FIELD_RE = re.compile(
     r'(?i)("(?:password|token|secret)")(\s*:\s*)("(?:\\.|[^"\\])*")'
 )
-# Log / form style: password=value or password: value (no spaces in value)
+# Log / form style: password=value or password: value (no spaces in value).
+# Negative lookbehind: do not treat "<SECRET:…" / "<CREDENTIAL:…" as field hits.
 _LOG_SENSITIVE_FIELD_RE = re.compile(
-    r"(?i)\b(password|token|secret)(\s*[=:]\s*)([^\s,;\"'}]+)"
+    r"(?i)(?<!<)\b(password|token|secret)(\s*[=:]\s*)([^\s,;\"'}]+)"
 )
 
 _PEM_BLOCK_RE = re.compile(
@@ -52,8 +53,9 @@ _PEM_BLOCK_RE = re.compile(
 )
 
 
-def _credential_placeholder(name: str) -> str:
-    return f"<CREDENTIAL:{name}>"
+def _session_material_token(name: str) -> str:
+    """Opaque dead code for short-lived adapter materials — never <CREDENTIAL:name>."""
+    return f"<SECRET:{make_token_id(name, 'value')}>"
 
 
 def _merged_identities(
@@ -64,6 +66,9 @@ def _merged_identities(
 
     Aggregation budgets (MAX_REGISTRY_ITEMS / MAX_TOTAL_VARIANT_CHARS) apply to
     this merged view — same constants as outbound redactor, no second budget set.
+
+    C9: replacements use conservative ``<SECRET:cg_…>`` tokens (registry
+    ``item.token`` / session opaque ids). Never emit usable ``<CREDENTIAL:name>``.
     """
     identities: List[Tuple[str, str]] = []
     if session_materials:
@@ -72,9 +77,9 @@ def _merged_identities(
                 raise VariantBuildError("session material name invalid")
             if not isinstance(secret, str) or not secret:
                 raise VariantBuildError("session material secret invalid")
-            identities.append((_credential_placeholder(name), secret))
+            identities.append((_session_material_token(name), secret))
     for item in registry.values():
-        identities.append((_credential_placeholder(item.key), item.secret))
+        identities.append((item.token, item.secret))
     return identities
 
 
@@ -129,17 +134,17 @@ def redact_registered(
 def _auth_cookie_replacement_value(value: str) -> str:
     """Whole-value auth/cookie replacement after registered redaction.
 
-    Unique registered identity → keep ``<CREDENTIAL:name>`` as the whole value.
+    Unique registered identity → keep its ``<SECRET:cg_…>`` token as the whole value.
     Unregistered or multiple distinct registered identities → ``<REDACTED_SECRET>``.
     """
-    names: List[str] = []
+    tokens: List[str] = []
     seen: set[str] = set()
-    for name in _CREDENTIAL_PLACEHOLDER_RE.findall(value):
-        if name not in seen:
-            seen.add(name)
-            names.append(name)
-    if len(names) == 1:
-        return _credential_placeholder(names[0])
+    for tok in _SECRET_PLACEHOLDER_RE.findall(value):
+        if tok not in seen:
+            seen.add(tok)
+            tokens.append(tok)
+    if len(tokens) == 1:
+        return tokens[0]
     return REDACTED_SECRET
 
 
@@ -228,7 +233,7 @@ def assert_zero_residue(
         value = match.group(3).strip()
         if not value or value == REDACTED_SECRET:
             continue
-        if _CREDENTIAL_PLACEHOLDER_RE.fullmatch(value):
+        if _SECRET_PLACEHOLDER_RE.fullmatch(value):
             continue
         if re.match(r"(?i)(Bearer|Basic)\s+\S+", value):
             raise RuntimeError("auth header residue remains")
@@ -252,10 +257,8 @@ def guard_tool_result(
         return out
     except Exception:
         # Fixed warning + reason code only — never log bodies or exception objects.
-        logger.warning(
-            "credential-guard result_guard failed closed reason=%s",
-            RESULT_GUARD_FAIL_REASON,
-        )
+        # Non-blocking fixed event; worker may block on lastResort/stderr.
+        submit_result_guard_fail_closed()
         return RESULT_GUARD_FAIL_TEXT
 
 

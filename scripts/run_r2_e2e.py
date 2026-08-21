@@ -96,6 +96,15 @@ def run_scenario(scenario: str) -> Dict[str, Any]:
     home = Path(os.environ["HOME"])
     (home / "tmp").mkdir(parents=True, exist_ok=True)
 
+    # The plugin no longer locates its store from the environment (that guess
+    # caused three credential leaks); it derives the profile root from its own
+    # install location and fails closed otherwise. This harness runs from a
+    # source checkout, so pin the store explicitly to the scenario's temporary
+    # profile -- the same seam the test suite uses.
+    from credential_guard import store_location
+
+    store_location.use_store_dir(hermes_home / store_location.STORE_DIRNAME)
+
     token = "CG_R2E_" + secrets.token_urlsafe(24)
     _write_config(hermes_home, token)
 
@@ -111,7 +120,7 @@ def run_scenario(scenario: str) -> Dict[str, Any]:
         reset_runtime_for_tests,
     )
     from credential_guard.tool_execution import (
-        RUNTIME_ADAPTER_NOT_READY,
+        PLAN_NOT_PENDING,
         get_http_adapter_invoke_count,
         reset_http_adapter_observe_for_tests,
         set_http_transport_override_for_tests,
@@ -431,7 +440,7 @@ def run_scenario(scenario: str) -> Dict[str, Any]:
                     )
                     result_s = result if isinstance(result, str) else json.dumps(result)
                     evidence["canary_in_result"] = _scan(result_s, token)
-                    if RUNTIME_ADAPTER_NOT_READY in result_s:
+                    if PLAN_NOT_PENDING in result_s:
                         evidence["adapter_not_ready"] = True
                     try:
                         parsed = json.loads(result_s)
@@ -455,7 +464,7 @@ def run_scenario(scenario: str) -> Dict[str, Any]:
                     )
                     result_s = result if isinstance(result, str) else json.dumps(result)
                     evidence["canary_in_result"] = _scan(result_s, token)
-                    if RUNTIME_ADAPTER_NOT_READY in result_s:
+                    if PLAN_NOT_PENDING in result_s:
                         evidence["adapter_not_ready"] = True
                     try:
                         parsed = json.loads(result_s)
@@ -480,7 +489,7 @@ def run_scenario(scenario: str) -> Dict[str, Any]:
                             skip_relay=True,
                         )
                         r2 = result2 if isinstance(result2, str) else json.dumps(result2)
-                        evidence["replay_blocked"] = RUNTIME_ADAPTER_NOT_READY in r2
+                        evidence["replay_blocked"] = PLAN_NOT_PENDING in r2
                         evidence["canary_in_result"] += _scan(r2, token)
                 else:
                     req = apply_tool_request_middleware(

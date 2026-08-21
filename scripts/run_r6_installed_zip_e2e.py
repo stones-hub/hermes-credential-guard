@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """R6 installed-ZIP approval-chain + wire-matrix E2E harness (opt-in).
 
-Installs the pinned 0.4.0 plugin ZIP into an isolated HOME/HERMES_HOME, proves
+Installs the pinned CURRENT-RELEASE plugin ZIP into an isolated HOME/HERMES_HOME, proves
 the loaded modules come from that install (not the source tree), then reuses
 the frozen R3C wire probe (read-only) — with ``_install_plugin`` replaced by
 the shared ZIP installer so the wire path exercises the packaged bytes.
@@ -20,6 +20,7 @@ import importlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -28,10 +29,20 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 REPO = Path(__file__).resolve().parents[1]
 
-#: Pinned 0.4.0 plugin ZIP identity — E2E fails closed if dist bytes drift.
-EXPECTED_PLUGIN_ZIP = "credential-guard-0.4.0-hermes-plugin.zip"
+#: C9 (0.4.5) unified egress redaction marker: ``<SECRET:cg_[0-9a-f]{16}>``.
+_REDACTION_MARKER_RE = re.compile(r"<SECRET:cg_[0-9a-f]{16}>")
+
+#: Pinned plugin ZIP identity — E2E fails closed if dist bytes drift.
+#:
+#: Was pinned to 0.4.0, which has NEVER existed in dist/ on any commit
+#: (``git ls-tree HEAD dist/`` starts at 0.4.2). Every run therefore died with
+#: FileNotFoundError before installing anything, so all 15 matrix cells errored
+#: — while three RETIRED tests in tests/test_r3c_wire_e2e.py still cited this
+#: matrix as their "live equivalent coverage". Repointed at the current release
+#: so that claim is backed by a run that can actually happen.
+EXPECTED_PLUGIN_ZIP = "credential-guard-0.4.5-hermes-plugin.zip"
 EXPECTED_PLUGIN_ZIP_SHA256 = (
-    "1fbc8c38da81226ef8a98f50702f2b3f5b369c5ce4767b8d0de8b2aaad20908d"
+    "125af9a681f65900a04edb51099ec52a1ebb01001f4396ab85770875a5951611"
 )
 
 #: 4a scenarios (subset).
@@ -219,9 +230,20 @@ def result_echo_redaction_via_installed_hooks(hooks, secret: str) -> Dict[str, A
         result=echoed, tool_name="http_credential_request", arguments={}
     )
     present = out.count(secret)
-    redacted_ok = present == 0 and (
-        "<CREDENTIAL:" in out or "安全" in out or "REDACTED" in out
+    # C9 (0.4.5) UNIFIED THE REDACTION PLACEHOLDER.
+    #
+    # The plaintext-absence check (``present == 0``) is the security assertion
+    # and is unchanged. This second clause only confirms the model actually sees
+    # a redaction marker rather than a silently emptied field. Pre-0.4.5 the
+    # marker was ``<CREDENTIAL:...>``; C9 unified every egress marker to
+    # ``<SECRET:cg_[0-9a-f]{16}>``, so the old spelling no longer appears and the
+    # historical check reported ``redacted_ok=False`` on a correctly redacted
+    # result. Both spellings are accepted here: the old one keeps historical
+    # artifacts (0.4.2/0.4.3/0.4.4 ZIPs) evaluable by this same harness.
+    marker_present = bool(_REDACTION_MARKER_RE.search(out)) or (
+        "<CREDENTIAL:" in out or "REDACTED" in out
     )
+    redacted_ok = present == 0 and marker_present
     return {
         "echo_secret_count_in_model_view": present,
         "redacted_ok": bool(redacted_ok),
@@ -389,7 +411,7 @@ def evaluate_approval_chain(summary: Dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4b — manifest ↔ registry parity on the installed 0.4.0 ZIP
+# 4b — manifest ↔ registry parity on the installed release ZIP
 # ---------------------------------------------------------------------------
 
 
@@ -524,7 +546,7 @@ def check_manifest_registry_consistency(
 
 
 # ---------------------------------------------------------------------------
-# 4b — full 3×5 wire matrix on the installed 0.4.0 ZIP
+# 4b — full 3×5 wire matrix on the installed release ZIP
 # ---------------------------------------------------------------------------
 
 
@@ -642,6 +664,19 @@ def _cell_reading(r: Dict[str, Any], *, adapter: str) -> Dict[str, Any]:
         "net_violations": int(r.get("net_violations") or 0),
         "counts": r.get("counts"),
         "result2_preview": (r.get("result2_preview") or "")[:120],
+        # Observer-independent approval evidence. The ``approval_*`` fields
+        # above are profiler-derived and blind to the worker thread; this one is
+        # written by the approval chain itself, so it stays truthful under the
+        # current thread model. Load-bearing for timeout-vs-deny.
+        #
+        # NOT truncated: the distinguishing phrases live at the END of the
+        # timeout notice ("... Silence is not consent."), so a [:200] slice
+        # would cut them off and make a correct timeout look like a failure.
+        # The message is a fixed host-authored string, never a credential value
+        # (zero-secret assertions above already cover the whole result).
+        "host_approval_message": str(
+            (r.get("host_approval_raw") or {}).get("message") or ""
+        ),
     }
 
 
@@ -673,18 +708,27 @@ def evaluate_matrix_cell(
     elif outcome == "timeout":
         assert int(reading["injection_resolve_delta"]) == 0
         assert hits == 0
-        assert reading["approval_is_timeout"] is True
-        assert reading["approval_timeout_branch"] is True
-        assert reading["approval_outcome"] == "timeout"
+        # R5 THREAD-MODEL ADAPTATION (observation only, not a relaxation).
+        #
+        # ``approval_is_timeout`` / ``approval_timeout_branch`` /
+        # ``approval_outcome`` are all derived from the carrier's
+        # ``await_gateway_call_count``, which comes from ``sys.setprofile`` and
+        # therefore only sees the CALLING thread. Hermes now dispatches tools on
+        # a worker thread, so that counter reads 0 and all three collapse to
+        # "non_timeout" even though the timeout branch really executed.
+        # Identical treatment to tests/test_r3c_wire_e2e.py::_assert_timeout_distinct.
+        #
+        # Load-bearing replacement: the HOST's own raw approval record, which is
+        # produced by the approval chain itself and is not observer-derived.
+        host = r.get("host_approval_raw") or {}
+        assert isinstance(host, dict) and host, (adapter, outcome)
+        host_msg = str(host.get("message") or "")
+        assert "timed out without user response" in host_msg, host_msg[:200]
+        assert "Silence is not consent" in host_msg, host_msg[:200]
         if deny_r is not None:
-            assert reading["approval_outcome"] != deny_r.get("approval_outcome")
-            assert (reading["approval_message"] or "") != (
-                deny_r.get("approval_message") or ""
-            )
-            host = r.get("host_approval_raw") or {}
-            host_msg = str(host.get("message") or "")
-            assert "timed out without user response" in host_msg
-            assert "Silence is not consent" in host_msg
+            deny_host = deny_r.get("host_approval_raw") or {}
+            deny_msg = str(deny_host.get("message") or "")
+            assert host_msg != deny_msg, "timeout must not read like deny"
     elif outcome == "mutate":
         # Fail-closed after post-approval tamper: no resolve, no target hit.
         # HTTP flips plan_state to invalidated (config identity recheck).
@@ -699,18 +743,28 @@ def evaluate_matrix_cell(
     elif outcome == "replay":
         assert int(reading["injection_resolve_delta"]) == 1
         assert hits == 1  # first execution hits once; second is closed
-        assert reading["replay_identity_same"] is True
-        assert reading["replay_closed"] is True
-        assert reading["second_resolve_delta"] == 0
-        assert reading["second_adapter_delta"] == 0
-        assert reading["second_start_delta"] == 0
-        ids = reading["tool_request_identities"]
-        assert len(ids) >= 2
-        for key in ("session_id", "turn_id", "tool_call_id", "args_digest"):
-            assert ids[0].get(key) and ids[0].get(key) == ids[1].get(key), key
-        assert "RUNTIME_ADAPTER_NOT_READY" in (reading.get("result2_preview") or "")
+        # R5 THREAD-MODEL ADAPTATION — ``replay_identity_same``,
+        # ``replay_closed``, ``tool_request_identities`` and the four
+        # ``second_*`` deltas are all profiler-derived and blind to the worker
+        # thread; the deltas are unconditionally ``None`` (the carrier only
+        # assigns them when ``tool_request_identities`` has >= 2 entries, and it
+        # has 0). Asserting them as-is is either false or vacuous.
+        #
+        # Load-bearing replacement: whole-run production totals. The scenario
+        # issues TWO calls on the same reference, so an OPEN replay would show
+        # resolve==2 / adapter==2 / hits==2. Same contract as
+        # tests/test_r3c_wire_e2e.py::_assert_replay_second_call_did_not_execute.
         if adapter == "http":
-            assert reading["second_http_target_delta"] == 0
+            assert int(reading["http_adapter_delta"]) == 1
+            assert int(reading["process_start_delta"]) == 0
+        else:
+            assert int(reading["process_start_delta"]) == 1
+            assert int(reading["http_adapter_delta"]) == 0
+        # C8 (0.4.5) split the collapsed RUNTIME_ADAPTER_NOT_READY exit into
+        # stage-specific codes; a replayed reference is refused at the
+        # reference-path guard, strictly earlier than the plan-state gate.
+        preview = reading.get("result2_preview") or ""
+        assert "REFERENCE_PATH_BLOCKED" in preview, preview[:200]
     else:
         raise AssertionError(f"unknown outcome: {outcome}")
 

@@ -1,6 +1,130 @@
 # HANDOVER
 
-## 当前状态（2026-08-14）
+## 当前状态（2026-08-21）
+
+**R11 / 0.4.5：两路独立只读终审均 PASS，待发布授权** — 开箱可用性与保护边界透明化
+（C1–C10）+ 迁移能力移除 + 测试隔离事故修复。
+方案：`docs/R11-0.4.5-开箱可用性与保护边界透明化-方案.md`；designated 报告：
+`docs/R11-0.4.5-验收报告.md`；遗留待办：`docs/R11-0.4.5-遗留待办.md`。
+
+已完成：
+
+```text
+C1–C10 源码 + C2 字段级安全诊断      完成
+版本 0.4.5（4 处锚点）                完成
+历史测试债 51 条清偿                  完成（36 AST + 13 线程观测 + 2 网络隔离）
+v1 双文件迁移器移除                   完成（见下节）
+测试套件 profile 隔离事故修复          完成（见下节）
+search_path_is_protected 崩溃修复      完成（生产缺陷，见下节）
+全量测试                              2205 passed / 3 xfailed / 0 failed
+0.4.5 四制品双次可复现构建            完成（逐字节一致）
+制品成分审计                          完成（0 污染，0 凭证命中）
+全新 HOME 隔离安装 E2E                完成
+两路独立只读终审                      **均 PASS，零 BLOCKING**（2026-08-21）
+```
+
+0.4.5 四制品已由真实双构建写入 `dist/`：
+
+```text
+plugin zip  a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3
+wheel       9096c11062b8b74ad29874db74208af753ea73a99f6035449166d1ed3d8c7dff
+sdist       e428dd89c6a6ae04242f6261ea9670995466757d0653bbd70e808a2e28713407
+manifest    ac56634322fb474093904036d77702f696791b29e6a841e76661bb147bbf1ed6
+epoch       1704067200
+```
+
+历史制品（0.4.2 / 0.4.3 / 0.4.4）SHA-256 零漂移。
+
+本轮修掉的构建器缺陷：`scripts/build_release_artifacts.py::clean_prior_artifacts()`
+原按 `*.whl` / `*.tar.gz` / `*-hermes-plugin.zip` 无差别通配删除，直接构建进仓库
+`dist/` 会静默删除 9 件已发布历史制品（实测 12 → 7 件）。已改为版本锚定清理，并新增
+两条承重回归 + 双向 mutation 验证。
+
+冻结身份记录在 `.r11-freeze-evidence.sha256` 的 `R11_TECHNICAL_CANDIDATE_SHA256`
+字段（自身排除在外，连续两次复算一致）。此处刻意不抄写字面哈希：这份
+HANDOVER 本身参与身份计算，抄进正文会在下次改文档时立刻过期并变成假陈述（R6 轮
+的 B2 blocking 就是这么来的）。旧冻结身份 `94a17ebb…`（36 文件，C1–C7 阶段）已作废。
+
+**未做：commit / push / Tag / GitHub Release / 安装正式 worker。**
+
+---
+
+## 0.4.5 迁移能力移除（破坏性变更）
+
+删除对象：
+
+```text
+credential_guard/migration.py           整个模块
+CLI 的 migrate-config 子命令             入口摘除
+tests/test_config_migration.py          70 条
+tests/test_c5_target_catalog.py 中一条   knife3 迁移用例
+```
+
+理由：0.4.5 是**第一个正式发布版本**（0.3.1 / 0.4.0 / 0.4.4 均未打 tag、未发
+GitHub Release），不存在持有 v1 双文件格式的既有用户。迁移器服务的用户群为空，
+留着反而是第四份「猜配置路径」的代码副本，构成风险入口。
+
+**升级影响**：从此不提供从 v1 双文件（`credentials.json` + `targets.json`）
+到 v2 单文件的自动迁移。若将来遇到 v1 格式配置，只能照 README 手工重建。
+
+**复审确认**：B 路逐条核对被删的 70 条测试所防风险，确认「防迁移器自身的风险
+（回滚 / journal 所有权 / flock 竞争 / TOCTOU / 原子改名）随能力删除而消失」，
+而夹带其中的三条通用安全性质（错误消息不泄漏绝对路径 / store 目录 700 /
+异常链 `__context__` 为 None）经 MUT7、MUT8b、MUT12 验证仍被 `test_config_v2.py`
+与 `test_profile_write_boundary.py` 承接转红。
+
+---
+
+## 0.4.5 测试隔离事故与生产缺陷修复
+
+**事故**：`tests/conftest.py` 的 store 桥接会 forward 它看到的**任何**
+`HERMES_HOME` 值——包括 Hermes 运行时自己导出的那个（指向正在使用的 profile）。
+结果：跑测试时 store 被指向操作员真实 profile，测试覆写了真实配置文件。
+该文件当时装的是 `DECOY` 诱饵值，**无真实凭证损失**。
+
+**修复**：桥接改为只 forward 测试运行期自己设置的值，进程启动时就存在的「继承值」
+一律忽略；任何解析结果指向 live profile 时硬断言失败。
+承重测试：`tests/test_r7_harness_profile_isolation.py`（6 条）。
+
+**连带发现的生产缺陷**：`credential_guard/sensitive_paths.py` 的
+`search_path_is_protected()` 调用会抛异常的 `_store_dir()`，当 profile 根不可推导时
+（源码直跑、非标准安装布局）异常穿透函数——**守卫崩溃即等于不设防**。
+同文件的 `_store_file_is_protected()` 早已用 `_store_dir_or_none()` 兜底，此处漏了。
+
+**修复**：改用 `_store_dir_or_none()` 并对 `None` 分支加保护。
+承重测试：`tests/test_r7_search_guard_underivable_root.py`（3 条）。
+
+两处修复均经复审 B 路变异验证承重：MUT5 使 search-guard 测试 3 passed → 3 failed；
+MUT6 使隔离测试 6 passed → 6 errors。
+
+---
+
+## 0.4.5 两路独立只读终审结论（2026-08-21）
+
+两路均 **PASS**，零 BLOCKING。绑定候选身份
+`HEAD=2d4c25d3…` / `porcelain sha256=265b84d2…`，开场收尾一致。
+
+A 路（凭证保护完整性 + 事故隔离）：
+- 真包八组矩阵：已配置 4/4 通过且诱饵零泄漏；未配置 4/4 拦截且 Provider=0；
+  store 位置在 `HERMES_HOME` 取【不设 / 真实 profile / `/tmp` / 空串】下恒定
+- 事故隔离：在 `HERMES_HOME` 指向真实 profile 下跑 245 条 store 相关测试 +
+  2205 条全量，真实配置文件 sha256 全程不变；6 种绕过尝试全部安全失败
+- 生产代码零处使用环境变量决定 store 位置
+
+B 路（删改是否掩盖真保护 + 新增测试是否空转）：
+- 15 个变异，12 个按预期转红，含对本轮两处修复的承重检验
+- 两个 r7 新文件 `-v` 跑出 9 条全 PASSED、零 SKIPPED
+- 条数对账：2281 → 2194 → 2205 逐段说得通
+
+原始结论存档：
+`~/.hermes/profiles/worker/cache/delegation/subagent-summary-{0,1}-20260821_211435_*.txt`
+
+**非阻断遗留**：B 路顺带发现 3 条既有面覆盖缺口，经用户确认延后至下一版，
+清单见 `docs/R11-0.4.5-遗留待办.md`。
+
+---
+
+## 历史状态（2026-08-14）
 
 **R10 / 0.4.4：技术候选 PASS（manifest size 严格绑定、最终 ZIP 与两路独立只读终审均通过）** — 协议骨架字段 value 命中已登记凭证变体
 必须本机 fail-closed（`LocalBlockRequest`，Provider=0）；content/arguments 仍替换逻辑
@@ -123,9 +247,10 @@ Cursor 综合复审（11 条产品边界逐条保留）、Hermes 证据真实性
    原 `test_r5_wire_full_main_chain_placeholder`（`assert False`）已翻面为
    `test_r5_wire_full_main_chain_matrix_closed`；那 5 条 R3 测试**仍保持退役状态**
    （历史证据，docstring 已指向 `tests/r6_installed_zip_wire_matrix.py`）。
-2. `KNOWN_GAP_2` — **仍未关闭**。`MIGRATION_V2_INVALID` 防御性兜底无测试覆盖
-   （该错误码仅出现于 `credential_guard/migration.py:957,959`）。兜底保留，覆盖延后，
-   不阻塞 R6 交付。
+2. `KNOWN_GAP_2` — **已消失（R11 / 0.4.5，非修复而是移除）**。原缺口：
+   `MIGRATION_V2_INVALID` 防御性兜底无测试覆盖。0.4.5 删除了整个 v1 双文件迁移器
+   （`credential_guard/migration.py` 与 `migrate-config` 子命令），该错误码及其兜底
+   分支一并不复存在，缺口随能力删除而消失。删除理由见「0.4.5 迁移能力移除」一节。
 3. `KNOWN_GAP_3` — **已关闭（R6 slice 3）**。原缺口：
    `tests/test_production_package_scan.py` 仅为静态源码/包成员契约，从不打开真实制品。
    slice 3 建立了真实制品成分审计（逐成员打开 ZIP/wheel/sdist），
