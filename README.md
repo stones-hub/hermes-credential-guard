@@ -11,6 +11,42 @@ bindings    = 允许申请执行的固定能力
 
 只配置 `credentials`、不配置 `bindings` 时，插件仍会保护已登记凭证，但 Hermes 不能使用这些凭证调用接口或运行程序。
 
+---
+
+## 初次安装：五步
+
+第一次用这个插件，按顺序做完这五步即可。每一步都有对应章节。
+
+```text
+1. 装插件          → 「安装」
+2. 建配置文件       → 「配置」（不建就用不了，见下）
+3. 校验并刷新目标    → hermes credential-guard validate / refresh-targets
+4. 重启 Hermes      → 新配置才会生效
+5. 自检             → hermes credential-guard check
+```
+
+**最重要的一条：0.4.5 起，没有配置文件就不能聊天。**
+
+插件从自己的安装位置反推出所在 Profile 的 Store 目录，只要该目录缺失、缺少 `credential-guard.json`，
+或配置的内容、结构、权限、属主不合法，插件一律**保护性阻断**模型请求，并在本地提示要创建哪个文件。
+这是 0.4.5 的破坏性变更（0.4.4 及更早为「未配置则放行」）。
+
+装完插件先别急着聊天，先做第 2 步。
+
+**每个 Profile 各自独立**：插件装在哪个 Profile，就只读那个 Profile 的配置，不共用、不继承。
+装到多个 Profile 时，每个都要单独建配置。
+
+### 配置目录里会有哪几个文件
+
+只有第一个需要你手写，其余由插件自动生成，**不要编辑**：
+
+| 文件 | 谁创建 | 作用 |
+|---|---|---|
+| `credential-guard.json` | **你手写** | 主配置，唯一真源，含真实秘密，权限 `0600` |
+| `credential-guard.targets.json` | 插件生成 | 模型可见的安全目标清单旁车，不含秘密 |
+| `.credential-guard.runtime.lock` | 插件生成 | 运行锁 |
+
+
 ## 保护边界（先读这里）
 
 **保护**
@@ -30,14 +66,9 @@ bindings    = 允许申请执行的固定能力
 
 ## 安装后第一步：最小可用配置
 
-**0.4.5 起，没有配置就不能聊天。** 插件从自己的安装位置反推出所在 Profile 的 Store 目录
-（`<Profile 根目录>/credential-guard/`）。只要该目录缺失、其中缺少 `credential-guard.json`，
-或配置的内容、结构、权限、属主不合法，插件一律**保护性阻断**模型请求，并在本地提示要创建
-哪个文件。0.4.4 及更早版本「未配置时照常放行」的行为已被撤回：过去的「找不到配置」既可能
-是真没配，也可能是插件猜错了位置，一个配好凭证的用户会在毫无察觉中失去脱敏保护。
-
-多 Profile 请注意：每个 Profile 各有自己的 Store 目录，装到新 Profile 需要为它单独建配置，
-不会共用另一个 Profile 的配置。
+「初次安装：五步」已说明未配置一律 fail-closed 阻断。这里补充其中一处细节：0.4.4 及更早
+「未配置时照常放行」的行为之所以被撤回，是因为过去的「找不到配置」既可能是真没配，也可能是
+插件猜错了位置，一个配好凭证的用户会在毫无察觉中失去脱敏保护。
 
 配置失败时的本地诊断为 best-effort，不改变阻断语义。对可安全定位的 Schema 错误，本地诊断会
 额外给出字段位置（如 `bindings.my-api.target`），只含逻辑名与固定字段名，绝不回显
@@ -857,6 +888,34 @@ hermes -p "$PROFILE" gateway restart
 
 修改 `credential-guard.json` 后也应开启新 CLI 会话或重启 Gateway，不能用旧运行时证明新配置已生效。
 
+## 被阻断时怎么办
+
+装完插件后如果聊天被拦住，本地 stderr 会打印一段以 `CG-CONFIG-UNAVAILABLE` 开头的诊断，
+其中包含固定「原因 / 处理」两行。**诊断只含固定文案与字段位置，绝不回显凭证值、host、program。**
+
+下表是全部诊断码及其处理方式（取自 `credential_guard/middleware.py` 的 `DIAGNOSTIC_REASONS`）：
+
+| 诊断码 | 原因 | 怎么办 |
+|---|---|---|
+| `CONFIG_NOT_FOUND` | 目录在，但没有 `credential-guard.json` | 按「配置」章节手工创建，权限 600 |
+| `CONFIG_INVALID_JSON` | JSON 语法错误（空文件也算） | 用 JSON 校验工具定位；空文件需重新生成 |
+| `CONFIG_INVALID_UTF8` | 不是合法 UTF-8 | 以 UTF-8 无 BOM 重新保存 |
+| `CONFIG_DUPLICATE_KEY` | JSON 中有重复键 | 删除重复键 |
+| `CONFIG_SCHEMA` | 字段不合法或有未知字段 | 对照字段表删除未知字段、补齐必填字段 |
+| `CONFIG_TOO_LARGE` | 文件超出大小上限 | 精简配置 |
+| `CONFIG_NOT_FILE` | 该路径不是普通文件 | 检查是否误建成了目录 |
+| `CONFIG_INSECURE_MODE` | 权限不是 600 | `chmod 600 "$GUARD_CONFIG"` |
+| `CONFIG_OWNER_MISMATCH` | 属主不是当前用户 | 改为当前用户所有 |
+| `CONFIG_SYMLINK` | 配置文件是符号链接 | 换成普通文件 |
+| `CONFIG_LOCK_FS` | 配置目录权限/属主/符号链接不合规 | 目录须 700、属主为当前用户、非符号链接 |
+| `CONFIG_LOCK_TIMEOUT` | 获取配置锁超时 | 确认没有其它进程正在读写配置后重试 |
+| `CONFIG_LOCK_STORE_ROOT_NOT_FOUND` | `HERMES_HOME` 指向的目录不存在 | 检查该环境变量，或直接取消设置 |
+| `CONFIG_LOCK_STORE_ROOT_NOT_A_PROFILE` | 该目录不是 Hermes profile | 同上 |
+
+排查顺序建议：先跑 `hermes -p "$PROFILE" credential-guard validate` 离线定位，
+改完再 `refresh-targets`，最后重启 Hermes。
+
+
 # 更新与回滚
 
 ## Git 在线安装更新
@@ -947,9 +1006,9 @@ CG_R6_BUILD_AUTHORIZED=1 .venv/bin/python scripts/build_release_artifacts.py
 dist/credential-guard-0.4.5-hermes-plugin.zip
   a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3
 dist/hermes_credential_guard-0.4.5-py3-none-any.whl
-  8d9e0fbf7acd27474575af5b883a00e0f16acf566a4b49e5ef68e05b5c8cdb32
+  9096c11062b8b74ad29874db74208af753ea73a99f6035449166d1ed3d8c7dff
 dist/hermes_credential_guard-0.4.5.tar.gz
-  6b133e1d06a09a7c10415f74eca0f2e7d2637058636683ef89244c6b80aa027e
+  e428dd89c6a6ae04242f6261ea9670995466757d0653bbd70e808a2e28713407
 dist/artifact-manifest-0.4.5.json
   ac56634322fb474093904036d77702f696791b29e6a841e76661bb147bbf1ed6
 ```
@@ -960,15 +1019,6 @@ dist/artifact-manifest-0.4.5.json
 <https://github.com/stones-hub/hermes-credential-guard/releases>
 
 > 构建脚本按版本锚定清理：只清理当前版本的正式文件名与其 `.tmp` 半成品。
-
-历史 0.4.3 锚点（零漂移保留）：
-
-```text
-dist/credential-guard-0.4.3-hermes-plugin.zip
-dist/artifact-manifest-0.4.3.json
-dist/hermes_credential_guard-0.4.3-py3-none-any.whl
-dist/hermes_credential_guard-0.4.3.tar.gz
-```
 
 发布构建应在完整测试通过后进行。普通用户安装正式插件 ZIP 后不需要再次构建。
 
