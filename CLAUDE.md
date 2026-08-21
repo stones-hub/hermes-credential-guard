@@ -56,6 +56,16 @@ value 命中已登记凭证变体 fail-closed；方案 docs/R10-0.4.4-协议字�
 验收 docs/R10-0.4.4-验收报告.md；Release notes docs/R10-0.4.4-Release-Notes.md。
 artifact-manifest 三 entry 现绑定 filename/sha256/size；0.4.4 四制品已双构建 copy2 落地；
 主代理全量 1960 passed / 3 xfailed / 0 failed，两路终审均 PASS；尚未 commit/push/Tag/GitHub Release；未操作正式 worker。
+
+R11 / 0.4.5：**首个正式发布版本**（已 commit/push/Tag `v0.4.5`/GitHub Release）——开箱可用性与
+保护边界透明化；版本目标与最终落地逐条对照见 docs/R11-0.4.5-版本目标与落地对照.md；
+Release notes docs/R11-0.4.5-Release-Notes.md；遗留待办 docs/R11-0.4.5-遗留待办.md。
+两处破坏性变更：①「无配置也放行」被撤回，改为 fail-closed（每个 profile 必须各自建配置）；
+②整套 v1 迁移器删除（`credential_guard/migration.py` 与 `migrate-config` 子命令）。
+存储路径改由 `credential_guard/store_location.py` 从插件安装位置反推 profile 根，成为唯一真相源。
+全量 2180 passed / 3 xfailed / 0 failed。
+`dist/` policy 改为只留当前版本四制品，旧版本从 GitHub Releases 取；旧制品若重新出现，
+`test_retired_release_artifacts_are_not_reintroduced` 会失败。
 ```
 
 R5 关键事实：删除 50 个批准文件（7 个生产模块 + 整个 vendored PyMySQL + 17 个旧测试脚本），
@@ -73,8 +83,9 @@ auditor 旧架构残留 520 → 38（8 个旧类别全部消失，剩余全在 t
    `scripts/run_r6_installed_zip_tests.py`）；占位符翻为
    `test_r5_wire_full_main_chain_matrix_closed`。R3 五条退役测试保持
    RETIRED 历史证据，不翻面。
-2. `KNOWN_GAP_2` — `MIGRATION_V2_INVALID` 防御性兜底无测试覆盖（该错误码仅出现于
-   `credential_guard/migration.py`）；兜底保留，覆盖延后。
+2. `KNOWN_GAP_2` — **已消失（R11 / 0.4.5，能力移除而非补测试）**。0.4.5 删除了
+   整套 v1 双文件迁移器（`credential_guard/migration.py` 与 `migrate-config`
+   子命令），`MIGRATION_V2_INVALID` 错误码及其未覆盖的兜底分支一并不复存在。
 3. `KNOWN_GAP_3` — **已关闭（R6 slice 3）**：真实制品成分审计见
    `tests/test_r6_artifact_composition.py`（`tests/test_production_package_scan.py`
    仍为静态源码/包成员契约）。
