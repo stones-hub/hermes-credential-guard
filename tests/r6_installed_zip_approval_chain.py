@@ -27,7 +27,7 @@ HARNESS = ROOT / "scripts" / "run_r6_installed_zip_e2e.py"
 ZIP_HELPERS = ROOT / "scripts" / "installed_zip_plugin.py"
 PINNED_ZIP = ROOT / "dist" / "credential-guard-0.4.5-hermes-plugin.zip"
 PINNED_SHA256 = (
-    "125af9a681f65900a04edb51099ec52a1ebb01001f4396ab85770875a5951611"
+    "a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3"
 )
 
 

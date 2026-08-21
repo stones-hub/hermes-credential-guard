@@ -623,10 +623,6 @@ _R3_RECLOSURE_STATUS = (
 # Sidecar EXCLUDES must NOT be expanded to hide these.
 _R4_DELTA_PATHS = frozenset(
     {
-        ".r4-implementation-task.md",
-        ".r4-round2-narrow-fix-task.md",
-        ".r4-round3-historical-test-migration-task.md",
-        ".r4-round4-final-review-blockers-task.md",
         ".r4-tdd-evidence.log",
         ".r4-freeze-evidence.sha256",
         "credential_guard/result_guard.py",
@@ -650,22 +646,13 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         "docs/R5-门禁收口方案与绕过清单.md",
         ".r5-baseline-manifest.sha256",
         ".r5-tdd-evidence.log",
-        ".r5-round1-red-foundations-task.md",
-        ".r5-round1a-false-green-fix-task.md",
-        ".r5-round1b-topology-no-skip-task.md",
-        ".r5-round1c-final-gate-blockers-task.md",
-        ".r5-round1d-control-flow-bootstrap-task.md",
         "scripts/audit_legacy_residue.py",
         "scripts/run_r5_nobuild_pytest.py",
         "scripts/probe_r5_round1e_bypass.py",
         "tests/test_legacy_residue_gate.py",
         "tests/test_r5_topology_gate.py",
         "tests/test_r5_nobuild_runner_gate.py",
-        ".r5-slice-b-constants-task.md",
-        ".r5-slice-b-fix-task.md",
         "credential_guard/constants.py",
-        ".r5-prep-decouple-task.md",
-        ".r5-migration-dep-inventory-task.md",
         # Prep knife creates the six pre-declared R5_ADDED gate/carrier files;
         # historical layered accounting requires them in this delta (same class
         # of fix as credential_guard/constants.py in Slice B).
@@ -675,25 +662,13 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         "tests/test_r5_approval_host_posture.py",
         "tests/test_r5_provider_result_closure.py",
         "tests/test_ssh_config_non_interference.py",
-        ".r5-atomic-delete-task.md",
-        ".r5-property-migration-task.md",
-        ".r5-atomic-delete-task-v2.md",
-        ".r5-migration-v2-conflict-fix-task.md",
-        ".r5-atomic-delete-task-v3.md",
-        ".r5-post-delete-wrapup-task.md",
-        ".r5-final-two-gates-task.md",
-        ".r5-final-gates-round2-task.md",
-        ".r5-ignore-retirement-task.md",
-        ".r5-dead-code-cleanup-task.md",
         # Created by the main agent at R5 final verification (implementation plan
         # line 494): the R5 freeze evidence sidecar. Declared here so layered
         # file-count accounting stays exact once phase flips to FINAL.
         ".r5-freeze-evidence.sha256",
         # R6 slice 1 task file (version bump + manifest key contraction).
-        ".r6-slice1-version-and-schema-task.md",
         # R6 slice 2: task file plus the three files it adds (opt-in real-build
         # check module, its dedicated runner, and the self-proving gate).
-        ".r6-slice2-build-and-reproducibility-task.md",
         "scripts/run_r6_build_tests.py",
         "tests/r6_real_build_check.py",
         "tests/test_r6_build_optin_gate.py",
@@ -702,7 +677,6 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # 0.3.1, which is pinned via _DIST_ARTIFACTS instead). Current-release
         # 0.4.0 bytes are pinned by tests/test_r6_artifact_composition.py and
         # classified in the topology gate's R5_ADDED_PATHS.
-        ".r6-slice3-artifact-audit-task.md",
         "tests/support/artifact_composition_audit.py",
         "tests/test_r6_artifact_composition.py",
         "tests/test_current_dist_policy.py",
@@ -714,44 +688,31 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # R6 slice 4a source/task deltas. dist/ members stay out of this
         # enumerator (_SKIP_DIRS includes dist); 0.4.0 ZIP identity is pinned
         # by the installed-ZIP E2E harness + artifact composition tests.
-        ".r6-slice4a-installed-zip-e2e-task.md",
         "scripts/installed_zip_plugin.py",
         "scripts/run_r6_installed_zip_e2e.py",
         "scripts/run_r6_installed_zip_tests.py",
         "tests/r6_installed_zip_approval_chain.py",
         "tests/test_r6_installed_zip_optin_gate.py",
         # R6 slice 4b: wire matrix module + task brief (KNOWN_GAP_1 close).
-        ".r6-slice4b-wire-matrix-task.md",
         "tests/r6_installed_zip_wire_matrix.py",
         # R6 slice 5: delivery docs + task brief (acceptance report closes the
         # designated-report xfails; install/ops guide is the user-facing §11).
-        ".r6-slice5-delivery-docs-task.md",
         "docs/R6-0.4.0-验收报告.md",
-        "docs/R6-0.4.0-安装与运维指南.md",
         # R6 administrative wrap-up: progress-HTML backfill brief. Repo-side it
         # adds only this file (the brief's sole write target is the vault HTML),
         # so the layered file-count formula needs it declared here too.
-        ".r6-progress-html-backfill-task.md",
         # R6 completion-criterion #10: three-way review brief + 0.4.0 freeze
         # sidecar. Same class as .r5-freeze-evidence.sha256 above — the sidecar is
         # created at final verification and must be declared so layered
         # file-count accounting stays exact.
-        ".r6-final-review-task.md",
         ".r6-freeze-evidence.sha256",
         # Criterion #10 round 2 brief (see the topology ledger for the rationale).
-        ".r6-round2-evidence-authenticity-task.md",
         # Criterion #10 round 2b brief: BLOCKING-fix confirmation re-review.
-        ".r6-round2b-blocking-fix-verify-task.md",
         # R7 outbound compatibility (same added paths as topology ledger).
-        ".r7-task.md",
-        ".r7-round2-narrow-fix-task.md",
         "docs/R7-Hermes当前版本真实外发兼容性修复方案.md",
         "tests/test_r7_long_text_and_local_block.py",
         # R7 release 0.4.1 + vetoed R8 investigation record (non-dist paths only;
         # dist/ members are skipped by the historical enumerator).
-        ".r7-release-0.4.1-task.md",
-        ".r7-041-final-zip-evidence-narrow-fix-task.md",
-        ".r7-041-json-escape-evidence-final-fix-task.md",
         "docs/R8-Hermes统一模型外发拦截接口-落地方案.md",
         "docs/R7-0.4.1-验收报告.md",
         "tests/test_r7_coverage_boundary_docs.py",
@@ -762,72 +723,41 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # R8 / 0.4.2 HTTP+HTTPS unified support + repo root metadata outside R5 baseline.
         ".gitignore",
         "LICENSE",
-        ".r8-http-support-task.md",
         ".r8-http-tdd-evidence.log",
-        ".r8-round2-blocking-fix-task.md",
         "docs/R8-0.4.2-HTTP与HTTPS统一凭证请求方案.md",
         "tests/test_r8_http_https_unified.py",
         # R8 release 0.4.2 (non-dist paths only; dist/ members skipped by enumerator).
         "docs/R8-0.4.2-验收报告.md",
-        "tests/r8_042_final_zip_e2e.py",
-        "tests/test_r8_042_final_zip_optin_gate.py",
-        "scripts/run_r8_042_final_zip_e2e.py",
-        "scripts/run_r8_042_final_zip_tests.py",
         # Long-session false-block + actionable BlockDetail UX (non-dist adds).
-        ".cg-long-session-block-ux-task.md",
         "tests/test_long_session_block_ux.py",
         # Block UX: never echo untrusted tool name in location text.
-        ".cg-block-ux-tool-name-fix-task.md",
         # Block-message structure gate: reject malformed / unknown-code prompts.
-        ".cg-block-message-structure-gate-fix-task.md",
         "tests/test_block_message_structure_gate.py",
         # Unresolved private-key boundary → provider-bound whole-field replace.
-        ".cg-unresolved-field-redaction-task.md",
         "tests/test_unresolved_field_redaction.py",
         # Ordinary dynamic key collision → unique safe keys → session continuity.
-        ".cg-collision-continuity-task.md",
         "tests/test_collision_continuity.py",
         # Evidence gate: safe keys are sequential, not SHA-256(content) derived.
-        ".cg-collision-hash-gate-task.md",
         # CG-RESIDUAL-SECRET long-session auto-recovery (history quarantine).
-        ".cg-residual-session-recovery-task.md",
-        ".cg-residual-session-recovery-round2-task.md",
         "tests/test_residual_session_recovery.py",
         # CG-SCANNER-ERROR long-session field-level recovery.
-        ".cg-scanner-error-session-recovery-task.md",
-        ".cg-scanner-error-session-recovery-round2-task.md",
-        ".cg-scanner-error-session-recovery-round3-task.md",
         "tests/test_scanner_error_session_recovery.py",
         # R9 / 0.4.3 release closeout (non-dist paths; dist/ skipped by enumerator).
-        ".cg-043-release-closeout-task.md",
-        ".cg-043-source-fallback-round2-task.md",
         "docs/R9-0.4.3-长Session连续性修复方案.md",
         "docs/R9-0.4.3-验收报告.md",
         "docs/R9-0.4.3-Release-Notes.md",
         "tests/test_protocol_field_whole_field_fallback.py",
-        "tests/r9_043_final_zip_e2e.py",
-        "tests/test_r9_043_final_zip_optin_gate.py",
-        "scripts/run_r9_043_final_zip_e2e.py",
-        "scripts/run_r9_043_final_zip_tests.py",
         # R10 / 0.4.4 artifacts landed (non-dist; dist/ skipped by enumerator).
-        ".cg-044-protocol-fields-fix-task.md",
-        ".cg-044-artifacts-land-task.md",
-        ".cg-044-manifest-size-fix-task.md",
         "docs/R10-0.4.4-协议字段已登记凭证失败关闭修复方案.md",
         "docs/R10-0.4.4-验收报告.md",
         "docs/R10-0.4.4-Release-Notes.md",
         "tests/test_protocol_field_registered_secret.py",
-        "tests/r10_044_final_zip_e2e.py",
-        "tests/test_r10_044_final_zip_optin_gate.py",
-        "scripts/run_r10_044_final_zip_e2e.py",
-        "scripts/run_r10_044_final_zip_tests.py",
         # scripts/run_final_zip_encoding_canary.py is baseline-era (modified only);
         # it stays out of this delta and is declared in R5_MODIFIED_PATHS.
         # R11 / 0.4.5 batch 1 (C1 + C2). Non-dist additions only; the four
         # touched production modules are baseline-era (modified only) and stay
         # out of this delta, declared in R5_MODIFIED_PATHS.
         "docs/R11-0.4.5-开箱可用性与保护边界透明化-方案.md",
-        ".c1c2-usability-task.md",
         ".cg-known-test-baseline.md",
         "tests/test_c1c2_zero_config_usability.py",
         # R11 / 0.4.5 batch 1, round 6: rounds 4 and 5 patched two symptoms of
@@ -845,25 +775,16 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # Round 8: non-blocking gaps found by the second read-only review,
         # recorded for the next version instead of fixed (user decision).
         "docs/R11-0.4.5-遗留待办.md",
+        "docs/R11-0.4.5-版本目标与落地对照.md",
         # R11 / 0.4.5 batch 1, round 2 (narrow fix task brief).
-        ".c1c2-round2-narrow-fix-task.md",
         # R11 / 0.4.5 batch 1, round 3 (closeout task brief).
-        ".c1c2-round3-closeout-task.md",
         # R11 / 0.4.5 batch 2 (C5 tool description binding list).
-        ".c5c7-usability-task.md",
-        ".c5-slice-task.md",
-        ".c5-round2-task.md",
-        ".c5-round3-task.md",
         "tests/test_c5c7_usability.py",
         # R11 / 0.4.5 batch 2, C6 (redacted credential-code misuse error).
-        ".c6-task.md",
         "credential_guard/credential_code.py",
         # R11 / 0.4.5 batch 2, C6 fixture closeout task brief (later delta).
-        ".c6-plugin-fixture-closeout-task.md",
         # R11 / 0.4.5 batch 2, C6 fixture gate-register task brief (later delta).
-        ".c6-fixture-gate-register-task.md",
         # R11 / 0.4.5 batch 2, C7 (unregistered credential local risk warning).
-        ".c7-task.md",
         "credential_guard/unregistered_warning.py",
         # R11 / 0.4.5 batch 1, round 6: the single source of truth for the
         # store location (derived from the install layout, never guessed from
@@ -874,9 +795,7 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # R11 / 0.4.5 batch 1, round 6: C1 pass-through withdrawal regression.
         "tests/test_r6_unconfigured_blocks.py",
         # R11 / 0.4.5 batch 2, C7 empty-session LRU narrow-fix task brief (later delta).
-        ".c7-empty-session-lru-fix-task.md",
         # R11 / 0.4.5 batch 2, C7 LRU gate-register task brief (later delta).
-        ".c7-lru-gate-register-task.md",
         # R11 / 0.4.5 C5 architecture: safe target catalog sidecar.
         "credential_guard/target_catalog.py",
         "tests/test_c5_target_catalog.py",
@@ -907,6 +826,16 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         ".r11-freeze-evidence.sha256",
     }
 )
+
+
+def _r5_baseline_relpaths() -> FrozenSet[str]:
+    """Non-dist relative paths recorded in the signed R5 baseline manifest.
+
+    Used to spot later-delta paths that are already inside the R3 reclosure
+    count, so the layered accounting does not count them twice.
+    """
+    baseline = _r5_topology.load_baseline()
+    return frozenset(p for p in baseline if not p.startswith("dist/"))
 
 
 def _r5_approved_deleted_paths() -> FrozenSet[str]:
@@ -970,11 +899,20 @@ def test_r3c_reclosure_identity_is_layered_from_r4_workspace():
     # a subtraction term too. It is derived from the signed topology gate, never
     # hardcoded, so any future change to the approved delete set moves it.
     r5_deleted_paths = _r5_approved_deleted_paths()
-    assert live_files == (
-        int(_R3_RECLOSURE_FILES)
-        + len(declared_later_paths)
-        - len(r5_deleted_paths)
+    # Rather than juggling count arithmetic (which silently tolerates two
+    # offsetting mistakes), derive the expected file SET and compare sizes.
+    # Every term comes from a signed source: the R5 baseline manifest, the
+    # declared later deltas, the approved delete set, and sidecar EXCLUDES.
+    baseline_paths = _r5_baseline_relpaths()
+    uncounted_baseline_paths = frozenset(
+        p for p in sidecar_excludes if (REPO / p).is_file()
     )
+    expected_live_paths = (
+        (baseline_paths | declared_later_paths)
+        - r5_deleted_paths
+        - uncounted_baseline_paths
+    )
+    assert live_files == len(expected_live_paths)
 
     # Every declared later delta path must exist in the live tree (explicit, not guessed).
     live_rels = {
@@ -993,7 +931,18 @@ def test_r3c_reclosure_identity_is_layered_from_r4_workspace():
     # approved deletions are the other half of that shape — removing later additions
     # is no longer sufficient, the deleted historical members must be added back.
     # Same derived term as the live ledger above; never hardcoded.
-    assert restored_files + len(r5_deleted_paths) == int(_R3_RECLOSURE_FILES)
+    # Path topology remains independently accountable. Derive the expected
+    # restored SET from signed sources instead of count arithmetic: start from
+    # the R5 baseline, drop the approved deletions, drop paths hidden by
+    # sidecar EXCLUDES, and drop baseline paths that are also declared later
+    # deltas (restored_excludes strips those from the walk).
+    expected_restored_paths = (
+        baseline_paths
+        - r5_deleted_paths
+        - uncounted_baseline_paths
+        - declared_later_paths
+    )
+    assert restored_files == len(expected_restored_paths)
     # Historical manifest bytes, like its content digest, are pinned by the immutable
     # sidecar above. R4 legitimately changed lengths of files already in the R3 set;
     # rebuilding path:sha256:len lines from current bytes cannot reproduce that old

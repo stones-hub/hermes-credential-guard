@@ -98,32 +98,33 @@ def test_landed_current_artifacts_exist_and_match_versioned_manifest():
     )
 
 
-def test_dist_has_current_release_files_and_retained_history():
+def test_dist_has_exactly_the_current_release_files():
+    """dist/ carries the current release only (R11 / 0.4.5 policy).
+
+    Superseded 0.4.2 / 0.4.3 / 0.4.4 artifacts were retired from the tree on
+    2026-08-21 with user approval; each remains downloadable from its GitHub
+    Release. Retired names must not reappear here.
+    """
     names = sorted(p.name for p in DIST.iterdir() if p.is_file())
-    retained = {
-        "artifact-manifest-0.4.2.json",
-        "credential-guard-0.4.2-hermes-plugin.zip",
-        "hermes_credential_guard-0.4.2-py3-none-any.whl",
-        "hermes_credential_guard-0.4.2.tar.gz",
-        "artifact-manifest-0.4.3.json",
-        "credential-guard-0.4.3-hermes-plugin.zip",
-        "hermes_credential_guard-0.4.3-py3-none-any.whl",
-        "hermes_credential_guard-0.4.3.tar.gz",
-        "artifact-manifest-0.4.4.json",
-        "credential-guard-0.4.4-hermes-plugin.zip",
-        "hermes_credential_guard-0.4.4-py3-none-any.whl",
-        "hermes_credential_guard-0.4.4.tar.gz",
+    retired = {
+        f"{stem}-{version}{suffix}"
+        for version in ("0.4.2", "0.4.3", "0.4.4")
+        for stem, suffix in (
+            ("artifact-manifest", ".json"),
+            ("credential-guard", "-hermes-plugin.zip"),
+            ("hermes_credential_guard", "-py3-none-any.whl"),
+            ("hermes_credential_guard", ".tar.gz"),
+        )
     }
+    assert sorted(set(names) & retired) == []
     if CURRENT_DIST_PHASE == "source_candidate_pending_build":
-        assert names == sorted(retained)
-        assert len(names) == 12
+        assert names == []
         assert WHEEL_FILENAME.endswith("-0.4.5-py3-none-any.whl")
         assert PLUGIN_ZIP_FILENAME not in names
         return
 
     expected = sorted(
-        retained
-        | {
+        {
             WHEEL_FILENAME,
             SDIST_FILENAME,
             PLUGIN_ZIP_FILENAME,
@@ -131,7 +132,7 @@ def test_dist_has_current_release_files_and_retained_history():
         }
     )
     assert names == expected
-    assert len(expected) == 16
+    assert len(expected) == 4
     assert WHEEL_FILENAME.endswith("-0.4.5-py3-none-any.whl")
 
 

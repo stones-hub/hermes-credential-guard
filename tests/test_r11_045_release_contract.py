@@ -124,26 +124,33 @@ def test_r11_045_standard_four_filenames_bind_version():
     assert SDIST_FILENAME == "hermes_credential_guard-0.4.5.tar.gz"
 
 
-def test_r11_045_historical_twelve_artifacts_hash_freeze():
+def test_r11_045_retired_artifacts_are_absent_and_current_set_is_exact():
+    """R11 / 0.4.5: superseded artifacts are retired from the tree.
+
+    The previous contract froze twelve historical artifacts here so a rebuild
+    could not silently rewrite shipped bytes. That protection now lives at the
+    published GitHub Release (each version's assets are immutable there), and
+    the user approved retiring the in-tree copies on 2026-08-21. What this gate
+    still guarantees is exactness: dist/ holds the current four files and
+    nothing else, so a stale or resurrected artifact fails loudly instead of
+    being quietly redistributed.
+    """
     actual = {p.name for p in DIST.iterdir() if p.is_file()}
-    expected_names = {name for name, _size, _sha in _HISTORICAL_12}
-    # History must survive the 0.4.5 build byte-for-byte. The current-version
-    # four-file set is allowed to coexist once it has landed; nothing else may.
+    retired_names = {name for name, _size, _sha in _HISTORICAL_12}
     current_four = {
         ARTIFACT_MANIFEST_FILENAME,
         PLUGIN_ZIP_FILENAME,
         WHEEL_FILENAME,
         SDIST_FILENAME,
     }
+    resurrected = sorted(actual & retired_names)
+    assert resurrected == [], f"retired artifacts back in dist/: {resurrected}"
     if CURRENT_DIST_PHASE == "source_candidate_pending_build":
-        assert actual == expected_names
+        assert actual == set()
     else:
-        assert actual == expected_names | current_four
-    for name, size, digest in _HISTORICAL_12:
-        path = DIST / name
-        assert path.is_file()
-        assert path.stat().st_size == size, f"size drift: {name}"
-        assert _sha256(path) == digest, f"sha drift: {name}"
+        assert actual == current_four
+    for name in sorted(retired_names):
+        assert not (DIST / name).exists(), f"retired artifact present: {name}"
 
 
 def test_r11_045_landed_phase_binds_current_artifacts_to_manifest():
@@ -272,19 +279,24 @@ def test_r11_045_readme_declares_current_phase_truthfully():
     * landed  — must state the artifacts are built AND publish the 0.4.5 plugin
       ZIP's real hash, which has to equal the on-disk artifact and the manifest.
 
-    In BOTH phases the install recipe must stay pinned to the last publicly
-    released, verifiable ZIP (0.4.4) with its real hash, because 0.4.5 has no
-    GitHub Release yet — a user following the README must never be pointed at a
-    download that does not exist.
+    In BOTH phases the install recipe must stay pinned to a publicly released,
+    verifiable ZIP with its real hash — a user following the README must never
+    be pointed at a download that does not exist. Before v0.4.5 was published
+    that meant staying on 0.4.4; now that v0.4.5 is tagged and released, the
+    recipe points at 0.4.5 and the hash must equal the on-disk artifact.
     """
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "当前版本：`0.4.5`" in text
     assert "EXPECTED_SHA256=" in text
-    # Install recipe remains on the last landed, publicly verifiable ZIP.
-    assert "credential-guard-0.4.4-hermes-plugin.zip" in text
-    assert (
-        "d6ee2bf6a92a4ca55ee37f24802cf26316ab38adcbe27b9d59a4ee9e944ae265" in text
-    )
+    # Install recipe points at the current, publicly released ZIP.
+    assert "credential-guard-0.4.5-hermes-plugin.zip" in text
+    assert "releases/download/v0.4.5/" in text
+    # Superseded install targets must not linger in the recipe.
+    assert "credential-guard-0.4.4-hermes-plugin.zip" not in text
+    assert "d6ee2bf6a92a4ca55ee37f24802cf26316ab38adcbe27b9d59a4ee9e944ae265" not in text
+    # The published hash must be the real one on disk, never invented.
+    on_disk = _sha256(DIST / PLUGIN_ZIP_FILENAME)
+    assert f'EXPECTED_SHA256="{on_disk}"' in text
 
     zip_hash_re = re.compile(
         r"credential-guard-0\.4\.5-hermes-plugin\.zip[`\s|]*`?([0-9a-f]{64})`?"
@@ -305,8 +317,8 @@ def test_r11_045_readme_declares_current_phase_truthfully():
     assert reported == _sha256(zip_path), "README hash ≠ on-disk plugin ZIP"
     man = json.loads((DIST / ARTIFACT_MANIFEST_FILENAME).read_text(encoding="utf-8"))
     assert reported == man["plugin_zip"]["sha256"], "README hash ≠ manifest"
-    # No public download exists yet: the README must not fabricate one.
-    assert "releases/download/v0.4.5" not in text
+    # v0.4.5 is published, so the download URL must exist and be verifiable.
+    assert "releases/download/v0.4.5/" in text
 
 
 def test_r11_045_designated_report_matches_phase():

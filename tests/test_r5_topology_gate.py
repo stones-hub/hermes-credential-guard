@@ -50,51 +50,29 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         ".r5-baseline-manifest.sha256",
         ".r5-freeze-evidence.sha256",
         # Round-1 task + no-build runner (documented in .r5-tdd-evidence.log)
-        ".r5-round1-red-foundations-task.md",
-        ".r5-round1a-false-green-fix-task.md",
-        ".r5-round1b-topology-no-skip-task.md",
-        ".r5-round1c-final-gate-blockers-task.md",
-        ".r5-round1d-control-flow-bootstrap-task.md",
         "scripts/run_r5_nobuild_pytest.py",
         "tests/test_r5_nobuild_runner_gate.py",
         # Round 1E gate-closure plan + bypass inventory + re-run probe
         "docs/R5-门禁收口方案与绕过清单.md",
         "scripts/probe_r5_round1e_bypass.py",
         # Slice B / Task 3 — decouple TOOLSET_NAME
-        ".r5-slice-b-constants-task.md",
         # Slice B fix — isolation helper side-effect leak
-        ".r5-slice-b-fix-task.md",
         # Prep knife — decouple 3 module-level deletion blockers
-        ".r5-prep-decouple-task.md",
         # Pre-existing read-only inventory task (present before this knife; was
         # unclassified and broke PHASE_PLANNING until declared).
-        ".r5-migration-dep-inventory-task.md",
-        ".r5-atomic-delete-task.md",
-        ".r5-property-migration-task.md",
-        ".r5-atomic-delete-task-v2.md",
-        ".r5-migration-v2-conflict-fix-task.md",
-        ".r5-atomic-delete-task-v3.md",
-        ".r5-post-delete-wrapup-task.md",
-        ".r5-final-two-gates-task.md",
-        ".r5-final-gates-round2-task.md",
-        ".r5-ignore-retirement-task.md",
-        ".r5-dead-code-cleanup-task.md",
         # R6 slice 1 task file. Registered in the existing R5 added-paths ledger
         # (no separate R6 topology ledger) so the live-workspace classifier and
         # the layered file-count formula stay exact.
-        ".r6-slice1-version-and-schema-task.md",
         # R6 slice 2 task file plus the three files the slice adds: the opt-in
         # real-build check module (named outside the no-build runner's
         # tests/test_*.py glob on purpose), its dedicated runner, and the gate
         # that self-proves the exclusion boundary.
-        ".r6-slice2-build-and-reproducibility-task.md",
         "scripts/run_r6_build_tests.py",
         "tests/r6_real_build_check.py",
         "tests/test_r6_build_optin_gate.py",
         # R6 slice 3: real artifact composition audit + landed 0.4.0 dist members.
         # 0.4.0 artifacts are current-release pins (not R3 historical freeze);
         # they must still be classified so FINAL topology accounting stays exact.
-        ".r6-slice3-artifact-audit-task.md",
         "tests/support/artifact_composition_audit.py",
         "tests/test_r6_artifact_composition.py",
         # Current release distribution policy: 0.4.5 source candidate + retained
@@ -109,53 +87,40 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         # R6 slice 4a: installed-ZIP approval-chain E2E (opt-in; outside
         # tests/test_*.py), shared ZIP install helpers, dedicated runner, and
         # the self-proving opt-in gate. Task file is the slice brief.
-        ".r6-slice4a-installed-zip-e2e-task.md",
         "scripts/installed_zip_plugin.py",
         "scripts/run_r6_installed_zip_e2e.py",
         "scripts/run_r6_installed_zip_tests.py",
         "tests/r6_installed_zip_approval_chain.py",
         "tests/test_r6_installed_zip_optin_gate.py",
         # R6 slice 4b: full wire matrix (KNOWN_GAP_1 close) + task brief.
-        ".r6-slice4b-wire-matrix-task.md",
         "tests/r6_installed_zip_wire_matrix.py",
         # R6 slice 5: delivery docs (acceptance report + install/ops guide) and
         # the slice task brief. No code/product behavior change beyond designated
         # report mapping in tests/test_reproducible_release.py.
-        ".r6-slice5-delivery-docs-task.md",
         "docs/R6-0.4.0-验收报告.md",
-        "docs/R6-0.4.0-安装与运维指南.md",
         # R6 administrative wrap-up: the progress-HTML backfill brief. It touches
         # no repo file (its only write target is the vault progress HTML), but it
         # lives in the workspace, so FINAL topology accounting must classify it
         # exactly like every other slice brief.
-        ".r6-progress-html-backfill-task.md",
         # R6 completion-criterion #10: the three-way independent read-only review
         # brief, plus the 0.4.0 freeze sidecar that anchors the reviewed identity.
         # The sidecar excludes itself (see its own EXCLUDES line) when computing
         # the digest it records, exactly as .r5-freeze-evidence.sha256 does, but it
         # is still a live file and must be classified here.
-        ".r6-final-review-task.md",
         ".r6-freeze-evidence.sha256",
         # Criterion #10 round 2: the evidence-authenticity brief, re-dispatched on a
         # different kernel after round 1's third route died on upstream rate limiting.
-        ".r6-round2-evidence-authenticity-task.md",
         # Criterion #10 round 2b: narrow re-review confirming the single valid
         # BLOCKING from round 2 (stale FULL_NOBUILD_PYTEST in the sidecar) is closed.
-        ".r6-round2b-blocking-fix-verify-task.md",
         # R7: Hermes current-version outbound compatibility fix (long-text false
         # block + llm_request local terminate). Task brief, scheme doc, regression.
-        ".r7-task.md",
         # R7 Round 2: independent-review blocker narrow fix brief.
-        ".r7-round2-narrow-fix-task.md",
         "docs/R7-Hermes当前版本真实外发兼容性修复方案.md",
         "tests/test_r7_long_text_and_local_block.py",
         # R7 release 0.4.1: administrative close + build/E2E/report (plugin-only).
-        ".r7-release-0.4.1-task.md",
         # R7 0.4.1 final-ZIP E2E evidence narrow-fix brief (independent review).
-        ".r7-041-final-zip-evidence-narrow-fix-task.md",
         # R7 0.4.1 final JSON-escape evidence fix brief. This task changes only
         # the final-ZIP harness/tests/report and must remain explicit topology.
-        ".r7-041-json-escape-evidence-final-fix-task.md",
         "docs/R8-Hermes统一模型外发拦截接口-落地方案.md",
         "docs/R7-0.4.1-验收报告.md",
         "tests/test_r7_coverage_boundary_docs.py",
@@ -170,84 +135,41 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         # are outside the R5 baseline and must be classified as added, not preserved.
         ".gitignore",
         "LICENSE",
-        ".r8-http-support-task.md",
         ".r8-http-tdd-evidence.log",
-        ".r8-round2-blocking-fix-task.md",
         "docs/R8-0.4.2-HTTP与HTTPS统一凭证请求方案.md",
         "tests/test_r8_http_https_unified.py",
         # R8 release 0.4.2: designated report, ZIP E2E, versioned dist members.
         "docs/R8-0.4.2-验收报告.md",
-        "tests/r8_042_final_zip_e2e.py",
-        "tests/test_r8_042_final_zip_optin_gate.py",
-        "scripts/run_r8_042_final_zip_e2e.py",
-        "scripts/run_r8_042_final_zip_tests.py",
-        "dist/artifact-manifest-0.4.2.json",
-        "dist/credential-guard-0.4.2-hermes-plugin.zip",
-        "dist/hermes_credential_guard-0.4.2-py3-none-any.whl",
-        "dist/hermes_credential_guard-0.4.2.tar.gz",
         # Long-session false-block + actionable BlockDetail UX narrow fix.
-        ".cg-long-session-block-ux-task.md",
         "tests/test_long_session_block_ux.py",
         # Block UX: never echo untrusted tool name in location text.
-        ".cg-block-ux-tool-name-fix-task.md",
         # Block-message structure gate: reject malformed / unknown-code prompts.
-        ".cg-block-message-structure-gate-fix-task.md",
         "tests/test_block_message_structure_gate.py",
         # Unresolved private-key boundary → provider-bound whole-field replace.
-        ".cg-unresolved-field-redaction-task.md",
         "tests/test_unresolved_field_redaction.py",
         # Ordinary dynamic key collision → unique safe keys → session continuity.
-        ".cg-collision-continuity-task.md",
         "tests/test_collision_continuity.py",
         # Evidence gate: safe keys are sequential, not SHA-256(content) derived.
-        ".cg-collision-hash-gate-task.md",
         # CG-RESIDUAL-SECRET long-session auto-recovery (history quarantine).
-        ".cg-residual-session-recovery-task.md",
-        ".cg-residual-session-recovery-round2-task.md",
         "tests/test_residual_session_recovery.py",
         # CG-SCANNER-ERROR long-session field-level recovery.
-        ".cg-scanner-error-session-recovery-task.md",
-        ".cg-scanner-error-session-recovery-round2-task.md",
-        ".cg-scanner-error-session-recovery-round3-task.md",
         "tests/test_scanner_error_session_recovery.py",
         # R9 / 0.4.3 release closeout: protocol-field whole-field fallback narrow,
         # designated report, Release Notes, final-ZIP E2E, retained 0.4.2 + new 0.4.3.
-        ".cg-043-release-closeout-task.md",
-        ".cg-043-source-fallback-round2-task.md",
         "docs/R9-0.4.3-长Session连续性修复方案.md",
         "docs/R9-0.4.3-验收报告.md",
         "docs/R9-0.4.3-Release-Notes.md",
         "tests/test_protocol_field_whole_field_fallback.py",
-        "tests/r9_043_final_zip_e2e.py",
-        "tests/test_r9_043_final_zip_optin_gate.py",
-        "scripts/run_r9_043_final_zip_e2e.py",
-        "scripts/run_r9_043_final_zip_tests.py",
-        "dist/artifact-manifest-0.4.3.json",
-        "dist/credential-guard-0.4.3-hermes-plugin.zip",
-        "dist/hermes_credential_guard-0.4.3-py3-none-any.whl",
-        "dist/hermes_credential_guard-0.4.3.tar.gz",
         # R10 / 0.4.4 artifacts landed: protocol-field registered-secret fail-closed
         # + dual-build copy2 four-file set (history 0.4.2/0.4.3 retained).
-        ".cg-044-protocol-fields-fix-task.md",
-        ".cg-044-artifacts-land-task.md",
-        ".cg-044-manifest-size-fix-task.md",
         "docs/R10-0.4.4-协议字段已登记凭证失败关闭修复方案.md",
         "docs/R10-0.4.4-验收报告.md",
         "docs/R10-0.4.4-Release-Notes.md",
         "tests/test_protocol_field_registered_secret.py",
-        "tests/r10_044_final_zip_e2e.py",
-        "tests/test_r10_044_final_zip_optin_gate.py",
-        "scripts/run_r10_044_final_zip_e2e.py",
-        "scripts/run_r10_044_final_zip_tests.py",
-        "dist/artifact-manifest-0.4.4.json",
-        "dist/credential-guard-0.4.4-hermes-plugin.zip",
-        "dist/hermes_credential_guard-0.4.4-py3-none-any.whl",
-        "dist/hermes_credential_guard-0.4.4.tar.gz",
         # R11 / 0.4.5 batch 1 (C1 zero-config pass-through + C2 config
         # diagnostics): scheme doc, task brief, re-qualified test baseline,
         # and the C1/C2 regression module.
         "docs/R11-0.4.5-开箱可用性与保护边界透明化-方案.md",
-        ".c1c2-usability-task.md",
         ".cg-known-test-baseline.md",
         "tests/test_c1c2_zero_config_usability.py",
         # R11 / 0.4.5 batch 1, round 6: the store location is derived from the
@@ -261,26 +183,18 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         # R11 / 0.4.5 round 8: deferred non-blocking gaps found by the second
         # read-only review, recorded instead of fixed (user decision).
         "docs/R11-0.4.5-遗留待办.md",
+        # R11 / 0.4.5 cleanup: version goals rewritten to match shipped code.
+        "docs/R11-0.4.5-版本目标与落地对照.md",
         "tests/test_r7_search_guard_underivable_root.py",
         # R11 / 0.4.5 batch 1, round 2: narrow-fix task brief.
-        ".c1c2-round2-narrow-fix-task.md",
         # R11 / 0.4.5 batch 1, round 3: closeout task brief.
-        ".c1c2-round3-closeout-task.md",
         # R11 / 0.4.5 batch 2 (C5 tool description binding list).
-        ".c5c7-usability-task.md",
-        ".c5-slice-task.md",
-        ".c5-round2-task.md",
-        ".c5-round3-task.md",
         "tests/test_c5c7_usability.py",
         # R11 / 0.4.5 batch 2, C6 (redacted credential-code misuse error).
-        ".c6-task.md",
         "credential_guard/credential_code.py",
         # R11 / 0.4.5 batch 2, C6 fixture closeout task brief (later delta).
-        ".c6-plugin-fixture-closeout-task.md",
         # R11 / 0.4.5 batch 2, C6 fixture gate-register task brief (later delta).
-        ".c6-fixture-gate-register-task.md",
         # R11 / 0.4.5 batch 2, C7 (unregistered credential local risk warning).
-        ".c7-task.md",
         "credential_guard/unregistered_warning.py",
         # R11 / 0.4.5 batch 1, round 6: the single source of truth for the
         # store location (derived from the install layout, never guessed from
@@ -291,9 +205,7 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         # R11 / 0.4.5 batch 1, round 6: C1 pass-through withdrawal regression.
         "tests/test_r6_unconfigured_blocks.py",
         # R11 / 0.4.5 batch 2, C7 empty-session LRU narrow-fix task brief (later delta).
-        ".c7-empty-session-lru-fix-task.md",
         # R11 / 0.4.5 batch 2, C7 LRU gate-register task brief (later delta).
-        ".c7-lru-gate-register-task.md",
         # R11 / 0.4.5 C5 architecture: safe target catalog sidecar.
         "credential_guard/target_catalog.py",
         "tests/test_c5_target_catalog.py",
@@ -326,6 +238,82 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
 
 R5_DELETED_PATHS: FrozenSet[str] = frozenset(
     {
+        # R11 / 0.4.5 cleanup (2026-08-21, user-approved): historical
+        # per-round task briefs and the superseded 0.4.0 install guide.
+        # They were construction scratch, not product; full content is
+        # backed up outside the repo and the shipped docs replace them.
+        ".m0-m1-close-task.md",
+        ".m0-m1-final-close-task.md",
+        ".m0-m1-fix-task.md",
+        ".m0-m1-release-fix-task.md",
+        ".m0-m1-task.md",
+        ".m0-m1-two-fixes-task.md",
+        ".m2-approval-fix-task.md",
+        ".m2-boundary-correction.md",
+        ".m2-final-evidence-task.md",
+        ".m2-manifest-schema-final-fix.md",
+        ".m2-release-blockers-task.md",
+        ".m2-report-refresh-task.md",
+        ".m2-reproducible-release-task.md",
+        ".m2-task.md",
+        ".m2-three-evidence-fixes-task.md",
+        ".m3-1-a-fix-task.md",
+        ".m3-1-a-task.md",
+        ".m3-1-b-fix-task.md",
+        ".m3-1-b-task.md",
+        ".m3-1-c-task.md",
+        ".m3-1-c-urlsafe-fix-task.md",
+        ".m3a-task.md",
+        ".r0-proof-hardening-task.md",
+        ".r0-tool-injection-proof-task.md",
+        ".r1a-final-adversarial-fix-task.md",
+        ".r1a-hardening-task.md",
+        ".r1a-identity-bound-cleanup-task.md",
+        ".r1a-lock-fix-task.md",
+        ".r1a-task.md",
+        ".r1a-transaction-redesign-task.md",
+        ".r1b-execute-code-guard-fix-task.md",
+        ".r1b-execute-code-guard-fix2-task.md",
+        ".r1b-execute-code-guard-fix3-task.md",
+        ".r1b-overlimit-evidence-task.md",
+        ".r1b-runtime-switch-task.md",
+        ".r2-config-lock-race-fix-task.md",
+        ".r2-config-lock-timeout-fix-task.md",
+        ".r2-final-plan-key-fix-task.md",
+        ".r2-implementation-task.md",
+        ".r2-independent-fix-task.md",
+        ".r2-package-scan-fix-task.md",
+        ".r2-published-snapshot-fix-task.md",
+        ".r2-reference-tool-fix-task.md",
+        ".r2-round7-evidence-false-green-fix-task.md",
+        ".r2-round7-final-closure-task.md",
+        ".r2-round8-final-review-blockers-task.md",
+        ".r3-reclosure-final-authenticity-mutation-fix-task.md",
+        ".r3-reclosure-final-authenticity-round2-task.md",
+        ".r3-reclosure-final-authenticity-round3-task.md",
+        ".r3-reclosure-final-authenticity-round4-task.md",
+        ".r3-reclosure-final-authenticity-round5-task.md",
+        ".r3-reclosure-final-authenticity-round6-task.md",
+        ".r3-reclosure-identity-gate-fix-task.md",
+        ".r3-reclosure-strict-tdd-task.md",
+        ".r3a-r2-historical-identity-gate-fix-task.md",
+        ".r3a-round2-final-review-blockers-task.md",
+        ".r3a-round3-httperror-deadline-task.md",
+        ".r3a-round4-final-two-blockers-task.md",
+        ".r3a-strict-tdd-task.md",
+        ".r3b-round2-test-helper-fix-task.md",
+        ".r3b-round3-final-review-blockers-task.md",
+        ".r3b-round4-final-review-blockers-task.md",
+        ".r3b-round5-final-three-blockers-task.md",
+        ".r3b-strict-tdd-task.md",
+        ".r3c-round2-final-review-blockers-task.md",
+        ".r3c-round3-final-authenticity-blockers-task.md",
+        ".r3c-round4-load-bearing-mutations-task.md",
+        ".r3c-strict-tdd-task.md",
+        ".r4-implementation-task.md",
+        ".r4-round2-narrow-fix-task.md",
+        ".r4-round3-historical-test-migration-task.md",
+        ".r4-round4-final-review-blockers-task.md",
         # Production modules
         "credential_guard/tools.py",
         "credential_guard/mysql_executor.py",

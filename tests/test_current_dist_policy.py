@@ -1,11 +1,17 @@
-"""Current release dist policy: 0.4.5 source candidate + retained 0.4.2/0.4.3/0.4.4.
+"""Current release dist policy: dist/ holds exactly the current release.
 
 Phase contract (strict=True):
-- ``source_candidate_pending_build``: PLUGIN_VERSION is 0.4.5; dist retains
-  historical 0.4.2 + 0.4.3 + landed 0.4.4 four-file sets; 0.4.5 artifacts must
-  be absent.
-- ``artifacts_landed``: flipped after dual-build copy2; 0.4.5 four files must
-  be present alongside retained history.
+- ``source_candidate_pending_build``: PLUGIN_VERSION is 0.4.5 and the 0.4.5
+  artifacts must be absent (dist/ is empty of release files).
+- ``artifacts_landed``: flipped after dual-build copy2; the 0.4.5 four-file
+  set must be present and nothing else.
+
+R11 / 0.4.5 policy change (user-approved 2026-08-21): superseded releases are
+no longer retained in-tree. Every published version is downloadable from its
+GitHub Release, so keeping stale binaries here only grew the repo and gave
+readers three obsolete install targets to copy from. This gate now asserts
+dist/ is exactly the current set — an old artifact reappearing is a failure,
+not a tolerated leftover.
 """
 
 from pathlib import Path
@@ -25,23 +31,16 @@ DIST = ROOT / "dist"
 CURRENT_DIST_PHASE = "artifacts_landed"
 STRICT = True
 
-_HISTORICAL_042 = {
-    "artifact-manifest-0.4.2.json",
-    "credential-guard-0.4.2-hermes-plugin.zip",
-    "hermes_credential_guard-0.4.2-py3-none-any.whl",
-    "hermes_credential_guard-0.4.2.tar.gz",
-}
-_HISTORICAL_043 = {
-    "artifact-manifest-0.4.3.json",
-    "credential-guard-0.4.3-hermes-plugin.zip",
-    "hermes_credential_guard-0.4.3-py3-none-any.whl",
-    "hermes_credential_guard-0.4.3.tar.gz",
-}
-_HISTORICAL_044 = {
-    "artifact-manifest-0.4.4.json",
-    "credential-guard-0.4.4-hermes-plugin.zip",
-    "hermes_credential_guard-0.4.4-py3-none-any.whl",
-    "hermes_credential_guard-0.4.4.tar.gz",
+# Superseded release filenames. They must NOT come back into dist/.
+_RETIRED_ARTIFACTS = {
+    f"{stem}-{version}{suffix}"
+    for version in ("0.4.2", "0.4.3", "0.4.4")
+    for stem, suffix in (
+        ("artifact-manifest", ".json"),
+        ("credential-guard", "-hermes-plugin.zip"),
+        ("hermes_credential_guard", "-py3-none-any.whl"),
+        ("hermes_credential_guard", ".tar.gz"),
+    )
 }
 _CURRENT_045 = {
     ARTIFACT_MANIFEST_FILENAME,
@@ -62,20 +61,25 @@ def test_dist_phase_contract_is_strict_and_version_aligned():
     assert PLUGIN_ZIP_FILENAME == "credential-guard-0.4.5-hermes-plugin.zip"
 
 
-def test_dist_contains_retained_history_and_phase_current_set():
+def test_dist_contains_only_the_current_release_set():
     actual = {path.name for path in DIST.iterdir() if path.is_file()}
-    retained = _HISTORICAL_042 | _HISTORICAL_043 | _HISTORICAL_044
     if CURRENT_DIST_PHASE == "source_candidate_pending_build":
-        assert actual == retained
+        assert actual == set()
         # 0.4.5 must not silently appear / be faked during source-candidate.
         assert not (DIST / PLUGIN_ZIP_FILENAME).exists()
         assert not (DIST / ARTIFACT_MANIFEST_FILENAME).exists()
         assert _CURRENT_045.isdisjoint(actual)
     else:
-        expected = retained | _CURRENT_045
-        assert actual == expected
+        assert actual == _CURRENT_045
         assert (DIST / PLUGIN_ZIP_FILENAME).is_file()
         assert (DIST / ARTIFACT_MANIFEST_FILENAME).is_file()
+
+
+def test_retired_release_artifacts_are_not_reintroduced():
+    """Old release binaries live on GitHub Releases, never back in dist/."""
+    actual = {path.name for path in DIST.iterdir() if path.is_file()}
+    resurrected = sorted(actual & _RETIRED_ARTIFACTS)
+    assert resurrected == [], f"retired artifacts back in dist/: {resurrected}"
 
 
 def test_legacy_unversioned_manifest_is_not_distributed():

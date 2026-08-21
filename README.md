@@ -2,7 +2,7 @@
 
 Credential Guard 是一个独立的 Hermes 插件，用于保护本机凭证，并在用户人工批准后让 Hermes 使用凭证执行受限操作，而不把真实凭证交给模型。
 
-当前版本：`0.4.5`（制品已落地：0.4.5 四制品已由真实双构建写入本仓库 `dist/`，哈希见下文「开发与验证」。尚未 GitHub Release、尚未 Tag、未由 Agent 安装正式 worker，因此下文「方式二：本地 ZIP 安装」的可核验下载配方仍指向已发布的 `0.4.4`。）
+当前版本：`0.4.5`（已 Tag `v0.4.5` 并发布 GitHub Release；四制品由真实双构建写入本仓库 `dist/`，哈希见下文「开发与验证」。）
 
 ```text
 credentials = 要保护的秘密
@@ -143,18 +143,16 @@ hermes -p "$PROFILE" plugins update credential-guard
 
 ## 方式二：本地 ZIP 安装
 
-本地安装必须使用正式制品。0.4.5 的插件 ZIP 已构建并落在本仓库 `dist/`，但尚未 Tag / 尚未 GitHub Release，因此**没有可公开下载的 0.4.5 地址**。下面这份可核验的下载 + 校验配方继续指向最后一个已发布的正式 ZIP：
+本地安装必须使用正式制品。0.4.5 已 Tag 并发布 GitHub Release，插件 ZIP 同时存在于本仓库 `dist/`：
 
 ```text
-credential-guard-0.4.4-hermes-plugin.zip
+credential-guard-0.4.5-hermes-plugin.zip
 ```
 
-如果你是从本仓库源码直接取用 0.4.5 制品，请改用 `dist/credential-guard-0.4.5-hermes-plugin.zip`，并按下文「开发与验证」列出的 SHA-256 自行核对；本节配方在 0.4.5 正式发布后一并切换。
-
-正式下载（GitHub Release 发布后；当前可核验制品亦可从本仓库 `dist/` 取得）：
+正式下载：
 
 ```text
-https://github.com/stones-hub/hermes-credential-guard/releases/download/v0.4.4/credential-guard-0.4.4-hermes-plugin.zip
+https://github.com/stones-hub/hermes-credential-guard/releases/download/v0.4.5/credential-guard-0.4.5-hermes-plugin.zip
 ```
 
 不要把 GitHub 自动生成的 `Source code.zip` 当作正式插件 ZIP。
@@ -165,12 +163,12 @@ https://github.com/stones-hub/hermes-credential-guard/releases/download/v0.4.4/c
 set -euo pipefail
 
 PROFILE="default"
-PLUGIN_ZIP="/path/to/credential-guard-0.4.4-hermes-plugin.zip"
-EXPECTED_SHA256="d6ee2bf6a92a4ca55ee37f24802cf26316ab38adcbe27b9d59a4ee9e944ae265"
+PLUGIN_ZIP="/path/to/credential-guard-0.4.5-hermes-plugin.zip"
+EXPECTED_SHA256="a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3"
 CONFIG_PATH="$(hermes -p "$PROFILE" config path)"
 PROFILE_ROOT="$(dirname "$CONFIG_PATH")"
 PLUGIN_DIR="$PROFILE_ROOT/plugins/credential-guard"
-STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/credential-guard-0.4.4.XXXXXX")"
+STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/credential-guard-0.4.5.XXXXXX")"
 ACTUAL_SHA256="$(shasum -a 256 "$PLUGIN_ZIP" | cut -d ' ' -f 1)"
 
 if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
@@ -193,7 +191,7 @@ set -euo pipefail
 unzip -q "$PLUGIN_ZIP" -d "$STAGE_DIR"
 test -f "$STAGE_DIR/credential-guard/plugin.yaml"
 test -f "$STAGE_DIR/credential-guard/__init__.py"
-grep -qx 'version: 0.4.4' "$STAGE_DIR/credential-guard/plugin.yaml"
+grep -qx 'version: 0.4.5' "$STAGE_DIR/credential-guard/plugin.yaml"
 test ! -e "$STAGE_DIR/credential-guard/credential-guard"
 printf '%s\n' "ZIP_STRUCTURE_OK"
 ```
@@ -201,7 +199,7 @@ printf '%s\n' "ZIP_STRUCTURE_OK"
 预期版本：
 
 ```text
-version: 0.4.4
+version: 0.4.5
 ```
 
 ZIP 应只有一层插件根目录：
@@ -225,7 +223,7 @@ mkdir -p "$PROFILE_ROOT/plugins"
 test ! -e "$PLUGIN_DIR"
 cp -R "$STAGE_DIR/credential-guard" "$PLUGIN_DIR"
 test -f "$PLUGIN_DIR/plugin.yaml"
-grep -qx 'version: 0.4.4' "$PLUGIN_DIR/plugin.yaml"
+grep -qx 'version: 0.4.5' "$PLUGIN_DIR/plugin.yaml"
 test ! -e "$PLUGIN_DIR/credential-guard"
 printf '%s\n' "PLUGIN_INSTALL_OK"
 ```
@@ -244,7 +242,7 @@ test -d "$BACKUP_DIR"
 test ! -e "$PLUGIN_DIR"
 cp -R "$STAGE_DIR/credential-guard" "$PLUGIN_DIR"
 test -f "$PLUGIN_DIR/plugin.yaml"
-grep -qx 'version: 0.4.4' "$PLUGIN_DIR/plugin.yaml"
+grep -qx 'version: 0.4.5' "$PLUGIN_DIR/plugin.yaml"
 test ! -e "$PLUGIN_DIR/credential-guard"
 printf '%s\n' "PLUGIN_UPGRADE_OK"
 ```
@@ -931,7 +929,7 @@ Credential Guard 不能把恶意本地程序变安全。`process_env` 和 `stdin
 CG_R6_BUILD_AUTHORIZED=1 .venv/bin/python scripts/build_release_artifacts.py
 ```
 
-当前活动 `dist/` 共 16 件：历史 0.4.2 / 已 Tag 的 0.4.3 / 已发布的 0.4.4 各四件，加上本轮真实双构建落地的 0.4.5 四件。历史 12 件在 0.4.5 构建前后 SHA-256 零漂移。
+当前活动 `dist/` 只含当前版本的 4 件 0.4.5 制品。已被取代的 0.4.2 / 0.4.3 / 0.4.4 制品不再随仓库分发——每个已发布版本的正式 ZIP 都可从对应的 GitHub Release 下载，仓库内不再保留副本。
 
 0.4.5 四制品（实测 SHA-256，与 `dist/artifact-manifest-0.4.5.json` 逐项一致）：
 
@@ -948,16 +946,10 @@ dist/artifact-manifest-0.4.5.json
 
 两次完全独立的构建产出逐字节相同的 wheel / sdist / plugin zip / manifest（`source_date_epoch=1704067200`、`tz=UTC`、`pythonhashseed=0`、归一化归档）。
 
-上一个已发布版本 0.4.4 四制品（零漂移保留）：
+历史版本制品请从 GitHub Releases 获取：
+<https://github.com/stones-hub/hermes-credential-guard/releases>
 
-```text
-dist/credential-guard-0.4.4-hermes-plugin.zip
-dist/artifact-manifest-0.4.4.json
-dist/hermes_credential_guard-0.4.4-py3-none-any.whl
-dist/hermes_credential_guard-0.4.4.tar.gz
-```
-
-> 构建脚本按版本锚定清理：只清理当前版本的正式文件名与其 `.tmp` 半成品，其它版本的已发布制品一律不动。
+> 构建脚本按版本锚定清理：只清理当前版本的正式文件名与其 `.tmp` 半成品。
 
 历史 0.4.3 锚点（零漂移保留）：
 
