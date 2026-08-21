@@ -30,11 +30,21 @@ bindings    = 允许申请执行的固定能力
 
 ## 安装后第一步：最小可用配置
 
-首次安装时，如果 `~/.hermes/credential-guard/` 配置目录尚不存在，普通聊天会正常放行，并在本地提示一次“已安装但未配置，凭证保护未启用”。该本地诊断为 best-effort，不影响聊天推进。
+**0.4.5 起，没有配置就不能聊天。** 插件从自己的安装位置反推出所在 Profile 的 Store 目录
+（`<Profile 根目录>/credential-guard/`）。只要该目录缺失、其中缺少 `credential-guard.json`，
+或配置的内容、结构、权限、属主不合法，插件一律**保护性阻断**模型请求，并在本地提示要创建
+哪个文件。0.4.4 及更早版本「未配置时照常放行」的行为已被撤回：过去的「找不到配置」既可能
+是真没配，也可能是插件猜错了位置，一个配好凭证的用户会在毫无察觉中失去脱敏保护。
 
-如果配置目录已经存在、但其中缺少 `credential-guard.json`，则视为半配置状态并继续保护性阻断；配置失败时的本地诊断同样为 best-effort，不改变阻断语义。配置文件存在但内容、结构、权限或属主不合法时也继续阻断。对可安全定位的 Schema 错误，本地诊断会额外给出字段位置（如 `bindings.my-api.target`），只含逻辑名与固定字段名，绝不回显 host / path / program / 凭证值。
+多 Profile 请注意：每个 Profile 各有自己的 Store 目录，装到新 Profile 需要为它单独建配置，
+不会共用另一个 Profile 的配置。
 
-最省事的起步方式是只写 `credentials`、把 `bindings` 留空 —— 此时脱敏保护立即生效，普通聊天不受影响，之后再逐步添加 binding：
+配置失败时的本地诊断为 best-effort，不改变阻断语义。对可安全定位的 Schema 错误，本地诊断会
+额外给出字段位置（如 `bindings.my-api.target`），只含逻辑名与固定字段名，绝不回显
+host / path / program / 凭证值。
+
+最省事的起步方式是只写 `credentials`、把 `bindings` 留空 —— 此时脱敏保护立即生效，普通聊天
+不受影响，之后再逐步添加 binding：
 
 ```json
 {
