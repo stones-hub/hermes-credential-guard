@@ -890,8 +890,28 @@ hermes -p "$PROFILE" gateway restart
 
 ## 被阻断时怎么办
 
-装完插件后如果聊天被拦住，本地 stderr 会打印一段以 `CG-CONFIG-UNAVAILABLE` 开头的诊断，
-其中包含固定「原因 / 处理」两行。**诊断只含固定文案与字段位置，绝不回显凭证值、host、program。**
+装完插件后如果聊天被拦住，本地 **stderr** 会打印一段固定格式的中文诊断，形如：
+
+```
+Credential Guard 配置加载失败，已进入保护性阻断。
+文件：/Users/<you>/.hermes/credential-guard/credential-guard.json
+位置：configuration
+原因：配置文件权限不安全，必须是 600。
+处理：执行 chmod 600 <配置文件> 后重试。
+```
+
+**诊断只含固定文案与字段位置，绝不回显凭证值、host、program。**
+
+> **已知问题（`api_mode: anthropic_messages` 用户）**
+> 阻断发生时，CLI 的**主输出**可能显示成
+> `Invalid API response after 3 retries: ...` 并空等数十秒重试，
+> 真正的中文诊断只出现在 stderr。
+> 带 `代码：CG-CONFIG-UNAVAILABLE` 那一行的阻断消息由
+> `format_block_message()` 构造在阻断响应体内，此时会被一并吞掉。
+> 原因是插件构造的本机阻断响应目前只有 OpenAI 形状（`choices`），
+> 未适配 Anthropic 形状（`content`），宿主
+> `agent/transports/anthropic.py::validate_response` 判其为无效响应而触发重试。
+> **排查时请以 stderr 的中文诊断为准，不要按 API 故障方向排查。**
 
 下表是全部诊断码及其处理方式（取自 `credential_guard/middleware.py` 的 `DIAGNOSTIC_REASONS`）：
 

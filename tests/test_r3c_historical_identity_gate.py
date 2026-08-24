@@ -824,6 +824,11 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # live workspace file and must be classified here or FINAL topology
         # accounting goes off by one.
         ".r11-freeze-evidence.sha256",
+        # R12 / 0.4.6 planning: root-cause plan for the local-block response
+        # shape not matching api_mode (anthropic_messages fails the host's
+        # validate_response and gets retried as an "invalid API response").
+        # Plan only -- no production code changed under this entry.
+        "docs/R12-0.4.6-阻断响应形状适配-方案.md",
     }
 )
 

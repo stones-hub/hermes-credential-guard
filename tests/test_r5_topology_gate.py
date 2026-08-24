@@ -233,6 +233,10 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         "dist/hermes_credential_guard-0.4.5.tar.gz",
         # R11 / 0.4.5 freeze sidecar (self-excluding, see its own EXCLUDES line).
         ".r11-freeze-evidence.sha256",
+        # R12 / 0.4.6 planning: root-cause plan for the local-block response
+        # shape not matching api_mode. Plan document only -- no production
+        # code, no dist artifact, and no version bump lands under this entry.
+        "docs/R12-0.4.6-阻断响应形状适配-方案.md",
     }
 )
 
