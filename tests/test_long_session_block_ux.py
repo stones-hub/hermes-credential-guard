@@ -530,7 +530,10 @@ def test_mutation_dropping_block_detail_loses_actionable_text(monkeypatch):
             "reason": "redaction failed closed",
         }
 
-    def mutated_blocked(detail=None):
+    def mutated_blocked(detail=None, api_mode=None):
+        # Mirrors _safe_blocked_response's signature (api_mode added in R12);
+        # this stub deliberately ignores api_mode because the mutation under
+        # test is about dropping BlockDetail, not about response shape.
         from types import SimpleNamespace
 
         return SimpleNamespace(

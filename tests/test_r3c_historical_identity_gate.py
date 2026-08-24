@@ -829,6 +829,12 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # validate_response and gets retried as an "invalid API response").
         # Plan only -- no production code changed under this entry.
         "docs/R12-0.4.6-阻断响应形状适配-方案.md",
+        # R12 / 0.4.6 fix: per-api_mode block response + its zero-regression
+        # suite. The host-contract script lives outside pytest because the
+        # repo venv is 3.9 and agent.anthropic_adapter needs >= 3.10, so the
+        # normalize_response round-trip is proven on the Hermes 3.11 venv.
+        "tests/test_r12_block_response_api_mode.py",
+        "scripts/run_r12_host_contract.py",
     }
 )
 

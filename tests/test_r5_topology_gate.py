@@ -237,6 +237,11 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         # shape not matching api_mode. Plan document only -- no production
         # code, no dist artifact, and no version bump lands under this entry.
         "docs/R12-0.4.6-阻断响应形状适配-方案.md",
+        # R12 / 0.4.6 fix: per-api_mode block response + zero-regression suite
+        # + the out-of-band host-contract script (repo venv is 3.9; the host
+        # adapter needs >= 3.10, so that assertion runs on the Hermes venv).
+        "tests/test_r12_block_response_api_mode.py",
+        "scripts/run_r12_host_contract.py",
     }
 )
 

@@ -681,11 +681,20 @@ def _detail_collision(location: str) -> BlockDetail:
     )
 
 
-def _safe_blocked_response(detail: Optional[BlockDetail] = None) -> SimpleNamespace:
-    """OpenAI-compatible chat.completion shape Hermes conversation loop can consume."""
-    if detail is None:
-        detail = _detail_scanner_error("request")
-    content = format_block_message(detail)
+#: api_mode values whose transport validates the OpenAI ``chat.completion``
+#: shape below. Everything not explicitly branched on falls back to it, so a
+#: new or unrecognised api_mode keeps today's behaviour rather than losing
+#: its block message to an unproven shape.
+_ANTHROPIC_API_MODE = "anthropic_messages"
+
+
+def _blocked_response_openai(content: str) -> SimpleNamespace:
+    """OpenAI-compatible chat.completion shape.
+
+    The historical default. ``chat_completions`` and ``bedrock_converse``
+    both accept it (measured), so it stays the fallback for every api_mode
+    we have not specifically branched on.
+    """
     return SimpleNamespace(
         id="credential_guard_blocked",
         object="chat.completion",
@@ -707,6 +716,46 @@ def _safe_blocked_response(detail: Optional[BlockDetail] = None) -> SimpleNamesp
         ],
         usage=SimpleNamespace(prompt_tokens=0, completion_tokens=0, total_tokens=0),
     )
+
+
+def _blocked_response_anthropic(content: str) -> SimpleNamespace:
+    """Anthropic Messages shape.
+
+    ``AnthropicTransport.validate_response`` requires ``content`` to be a
+    list; the OpenAI shape has no such attribute, so the host classified our
+    local block as a malformed provider reply and retried it three times,
+    surfacing ``Invalid API response after 3 retries`` while swallowing the
+    diagnostic. ``stop_reason='end_turn'`` marks a completed turn so the
+    agent loop does not read it as truncation.
+    """
+    return SimpleNamespace(
+        id="credential_guard_blocked",
+        type="message",
+        role="assistant",
+        model="credential-guard-blocked",
+        content=[SimpleNamespace(type="text", text=content)],
+        stop_reason="end_turn",
+        stop_sequence=None,
+        usage=SimpleNamespace(input_tokens=0, output_tokens=0),
+    )
+
+
+def _safe_blocked_response(
+    detail: Optional[BlockDetail] = None,
+    api_mode: Optional[str] = None,
+) -> SimpleNamespace:
+    """Local-block response in whatever shape the caller's transport accepts.
+
+    The block itself is identical either way — same text, same fail-closed
+    semantics, provider never called. Only the envelope differs, because the
+    host validates the envelope before it will show the operator anything.
+    """
+    if detail is None:
+        detail = _detail_scanner_error("request")
+    content = format_block_message(detail)
+    if api_mode == _ANTHROPIC_API_MODE:
+        return _blocked_response_anthropic(content)
+    return _blocked_response_openai(content)
 
 
 def _safe_request_fallback(detail: Optional[BlockDetail] = None) -> dict[str, Any]:
@@ -1619,6 +1668,12 @@ def on_llm_request(**kwargs: Any) -> dict[str, Any]:
 
 def on_llm_execution(**kwargs: Any) -> Any:
     next_call = kwargs.get("next_call")
+    # The host passes api_mode=agent.api_mode (conversation_loop.py). It picks
+    # the envelope our local block is wrapped in; an unknown or absent value
+    # falls back to the historical OpenAI shape.
+    api_mode = kwargs.get("api_mode")
+    if not isinstance(api_mode, str):
+        api_mode = None
     try:
         request = kwargs.get("request", {})
         session_id = kwargs.get("session_id", "") or ""
@@ -1630,17 +1685,19 @@ def on_llm_execution(**kwargs: Any) -> Any:
             if not isinstance(detail, BlockDetail):
                 detail = _detail_scanner_error("request")
             _log_fail_closed("llm_execution_prior_block", detail.code)
-            return _safe_blocked_response(detail)
+            return _safe_blocked_response(detail, api_mode=api_mode)
         redacted_request = _prepare_provider_bound(request, session_id=session_id)
         if not callable(next_call):
             detail = _detail_scanner_error("request")
             _log_fail_closed("llm_execution_missing_next", detail.code)
-            return _safe_blocked_response(detail)
+            return _safe_blocked_response(detail, api_mode=api_mode)
     except RequestBlock as rb:
         _log_fail_closed("llm_execution", rb.detail.code)
-        return _safe_blocked_response(rb.detail)
+        return _safe_blocked_response(rb.detail, api_mode=api_mode)
     except Exception:
         _log_fail_closed("llm_execution")
-        return _safe_blocked_response(_detail_scanner_error("request"))
+        return _safe_blocked_response(
+            _detail_scanner_error("request"), api_mode=api_mode
+        )
     # Downstream/provider errors must propagate — do not swallow next_call failures.
     return next_call(redacted_request)
