@@ -220,17 +220,18 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         # R11 / 0.4.5 version contract + pending final-ZIP harness (no dist write).
         "docs/R11-0.4.5-验收报告.md",
         "docs/R11-0.4.5-Release-Notes.md",
-        "tests/test_r11_045_release_contract.py",
-        "tests/r11_045_final_zip_e2e.py",
-        "scripts/run_r11_045_final_zip_e2e.py",
-        "scripts/run_r11_045_final_zip_tests.py",
-        # R11 / 0.4.5 artifacts landed: version-scoped clean_prior_artifacts fix
-        # (history-preserving) + dual-build four-file set built directly into
-        # dist/ (0.4.2/0.4.3/0.4.4 retained byte-identical).
-        "dist/artifact-manifest-0.4.5.json",
-        "dist/credential-guard-0.4.5-hermes-plugin.zip",
-        "dist/hermes_credential_guard-0.4.5-py3-none-any.whl",
-        "dist/hermes_credential_guard-0.4.5.tar.gz",
+        "tests/test_r12_046_release_contract.py",
+        "tests/r12_046_final_zip_e2e.py",
+        "scripts/run_r12_046_final_zip_e2e.py",
+        "scripts/run_r12_046_final_zip_tests.py",
+        # R12 / 0.4.6 artifacts landed: dual-build four-file set built directly
+        # into dist/. The superseded 0.4.5 set was retired from the tree (it
+        # stays downloadable from the published v0.4.5 GitHub Release), so the
+        # current release is the only artifact set the ledger expects here.
+        "dist/artifact-manifest-0.4.6.json",
+        "dist/credential-guard-0.4.6-hermes-plugin.zip",
+        "dist/hermes_credential_guard-0.4.6-py3-none-any.whl",
+        "dist/hermes_credential_guard-0.4.6.tar.gz",
         # R11 / 0.4.5 freeze sidecar (self-excluding, see its own EXCLUDES line).
         ".r11-freeze-evidence.sha256",
         # R12 / 0.4.6 planning: root-cause plan for the local-block response
@@ -242,6 +243,10 @@ R5_ADDED_PATHS: FrozenSet[str] = frozenset(
         # adapter needs >= 3.10, so that assertion runs on the Hermes venv).
         "tests/test_r12_block_response_api_mode.py",
         "scripts/run_r12_host_contract.py",
+        # R12 / 0.4.6 release: designated acceptance report (bound by
+        # test_reproducible_release's _DESIGNATED_REPORTS to the real dist
+        # plugin-ZIP hash, so it cannot carry invented numbers).
+        "docs/R12-0.4.6-验收报告.md",
     }
 )
 

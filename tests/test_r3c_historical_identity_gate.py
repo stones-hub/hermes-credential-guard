@@ -810,14 +810,14 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # R11 / 0.4.5 version contract + final-ZIP harness. dist/ members stay
         # out of this enumerator (_SKIP_DIRS includes dist), so the landed 0.4.5
         # four-file set does NOT appear here; their bytes are pinned by
-        # tests/test_r11_045_release_contract.py and classified in the topology
+        # tests/test_r12_046_release_contract.py and classified in the topology
         # gate's R5_ADDED_PATHS instead.
         "docs/R11-0.4.5-验收报告.md",
         "docs/R11-0.4.5-Release-Notes.md",
-        "tests/test_r11_045_release_contract.py",
-        "tests/r11_045_final_zip_e2e.py",
-        "scripts/run_r11_045_final_zip_e2e.py",
-        "scripts/run_r11_045_final_zip_tests.py",
+        "tests/test_r12_046_release_contract.py",
+        "tests/r12_046_final_zip_e2e.py",
+        "scripts/run_r12_046_final_zip_e2e.py",
+        "scripts/run_r12_046_final_zip_tests.py",
         # R11 / 0.4.5 freeze sidecar. Declared BEFORE it is written: the sidecar
         # excludes itself when computing the digest it records (same self-
         # reference discipline as .r5-/.r6-freeze-evidence.sha256), but it is a
@@ -835,6 +835,10 @@ _R5_PLANNING_DELTA_PATHS = frozenset(
         # normalize_response round-trip is proven on the Hermes 3.11 venv.
         "tests/test_r12_block_response_api_mode.py",
         "scripts/run_r12_host_contract.py",
+        # R12 / 0.4.6 release: the designated acceptance report. The release
+        # contract + final-ZIP harness were renamed 0.4.5 -> 0.4.6 in place
+        # (git mv), matching how R11 superseded R10, so they are not new paths.
+        "docs/R12-0.4.6-验收报告.md",
     }
 )
 

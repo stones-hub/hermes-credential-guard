@@ -1,10 +1,10 @@
-"""R11 0.4.5 final-ZIP isolated install E2E (opt-in; NOT in no-build corpus).
+"""R12 0.4.6 final-ZIP isolated install E2E (opt-in; NOT in no-build corpus).
 
 Filename deliberately outside ``tests/test_*.py`` so
 ``scripts/run_r5_nobuild_pytest.py`` never collects it. Execute only via
-``scripts/run_r11_045_final_zip_tests.py``.
+``scripts/run_r12_046_final_zip_tests.py``.
 
-Landed stage (``ARTIFACTS_LANDED=True``): every case exercises the real 0.4.5
+Landed stage (``ARTIFACTS_LANDED=True``): every case exercises the real 0.4.6
 plugin ZIP installed into a throwaway HOME/HERMES_HOME. Nothing here may fall
 back to the repo source tree, to a historical 0.4.4 ZIP, or to xfail/skip.
 The pending-stage contract is kept as an explicit branch so a regression that
@@ -19,12 +19,12 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-HARNESS_PATH = ROOT / "scripts" / "run_r11_045_final_zip_e2e.py"
+HARNESS_PATH = ROOT / "scripts" / "run_r12_046_final_zip_e2e.py"
 
 
 def _load_harness():
     spec = importlib.util.spec_from_file_location(
-        "r11_045_final_zip_harness", HARNESS_PATH
+        "r12_046_final_zip_harness", HARNESS_PATH
     )
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
@@ -41,7 +41,7 @@ def harness():
 def landed_zip(harness):
     if not harness.ARTIFACTS_LANDED:
         pytest.fail(
-            "ARTIFACTS_LANDED=False: 0.4.5 artifacts are not landed; this suite "
+            "ARTIFACTS_LANDED=False: 0.4.6 artifacts are not landed; this suite "
             "must not run against a historical ZIP (strict=True; not a skip)"
         )
     return harness.resolve_plugin_zip()
@@ -57,13 +57,13 @@ def out_of_box(harness, landed_zip):
     return harness.run_r11_out_of_box_from_install_tree(landed_zip)
 
 
-def test_r11_045_artifacts_landed_and_hash_bound(harness):
+def test_r12_046_artifacts_landed_and_hash_bound(harness):
     """Resolve must bind the landed ZIP to the versioned manifest."""
-    assert harness.PLUGIN_VERSION == "0.4.5"
+    assert harness.PLUGIN_VERSION == "0.4.6"
     assert harness.STRICT is True
     if not harness.ARTIFACTS_LANDED:
         with pytest.raises(
-            FileNotFoundError, match="R11_045_ARTIFACTS_PENDING_BUILD"
+            FileNotFoundError, match="R12_046_ARTIFACTS_PENDING_BUILD"
         ):
             harness.resolve_plugin_zip()
         return
@@ -75,7 +75,7 @@ def test_r11_045_artifacts_landed_and_hash_bound(harness):
     assert len(harness.EXPECTED_PLUGIN_ZIP_SHA256) == 64
 
 
-def test_r11_045_zip_sha_mismatch_is_red(harness, landed_zip):
+def test_r12_046_zip_sha_mismatch_is_red(harness, landed_zip):
     """A wrong expected hash must raise, proving resolve really compares."""
     with pytest.raises(AssertionError, match="sha drift"):
         harness.resolve_plugin_zip(
@@ -84,19 +84,19 @@ def test_r11_045_zip_sha_mismatch_is_red(harness, landed_zip):
         )
 
 
-def test_r11_045_final_zip_continuity_from_install_tree(
+def test_r12_046_final_zip_continuity_from_install_tree(
     harness, continuity_summary
 ):
     summary = continuity_summary
-    assert harness.evaluate_r11_045_final_zip_gates(summary) == 0
-    assert summary["plugin_version"] == "0.4.5"
+    assert harness.evaluate_r12_046_final_zip_gates(summary) == 0
+    assert summary["plugin_version"] == "0.4.6"
     assert summary["installed_from_zip"] is True
     assert summary["installed_module_file_under_source_tree"] is False
     assert summary["plugin_manager_loaded"] is True
     assert summary["credential_guard_listed"] is True
 
 
-def test_r11_045_continuity_security_boundary_readings(continuity_summary):
+def test_r12_046_continuity_security_boundary_readings(continuity_summary):
     """Explicit per-case Provider counts — not just the aggregate gate code."""
     s = continuity_summary
     # Must NOT false-block ordinary traffic.
@@ -112,7 +112,7 @@ def test_r11_045_continuity_security_boundary_readings(continuity_summary):
     assert s["decoy_absent_from_provider"] is True
 
 
-def test_r11_045_out_of_box_zero_config_and_broken_store(harness, out_of_box):
+def test_r12_046_out_of_box_zero_config_and_broken_store(harness, out_of_box):
     """C1: a fresh user can chat; a corrupt store still fails closed.
 
     Both directions are asserted together on purpose: passing through when
@@ -126,7 +126,7 @@ def test_r11_045_out_of_box_zero_config_and_broken_store(harness, out_of_box):
     assert out_of_box["broken_store_chat_blocked"] is True
 
 
-def test_r11_045_out_of_box_credential_code_and_validate(harness, out_of_box):
+def test_r12_046_out_of_box_credential_code_and_validate(harness, out_of_box):
     """C6 fixed refusal + C10 offline validate, from the install tree."""
     assert out_of_box["credential_code_recognized"] is True
     assert out_of_box["credential_code_rejects_plain"] is True
@@ -145,7 +145,7 @@ def test_r11_045_out_of_box_credential_code_and_validate(harness, out_of_box):
     assert "FAIL" in out_of_box["validate_insecure_parent_out"]
 
 
-def test_r11_045_out_of_box_gate_evaluator_is_load_bearing(harness, out_of_box):
+def test_r12_046_out_of_box_gate_evaluator_is_load_bearing(harness, out_of_box):
     """The gate must reject each degraded reading, not just accept the good one."""
     assert harness.evaluate_r11_out_of_box_gates(out_of_box) == 0
     degradations = (
@@ -165,7 +165,7 @@ def test_r11_045_out_of_box_gate_evaluator_is_load_bearing(harness, out_of_box):
         assert harness.evaluate_r11_out_of_box_gates(mutated) != 0, delta
 
 
-def test_r11_045_source_fallback_mutation_is_red(harness, landed_zip):
+def test_r12_046_source_fallback_mutation_is_red(harness, landed_zip):
     """Damaged install + healthy source must fail-closed via PluginManager."""
     proof = harness.prove_source_fallback_mutation_red(landed_zip)
     assert proof["install_damaged"] is True

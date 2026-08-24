@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
-EXPECTED_SHA256 = "a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3"
+EXPECTED_SHA256 = "399d9c8712d2e567fc2f0708d4bcd9bdc16c81b466a06f203a7ec30c7919b34c"
 
 
 def _readme() -> str:
@@ -24,7 +24,7 @@ def test_readme_zip_install_blocks_enable_errexit_and_validate_installed_root():
     assert text.count("set -euo pipefail") >= 3
     assert 'test ! -e "$PLUGIN_DIR"' in text
     assert 'test -f "$PLUGIN_DIR/plugin.yaml"' in text
-    assert "grep -qx 'version: 0.4.5' \"$PLUGIN_DIR/plugin.yaml\"" in text
+    assert "grep -qx 'version: 0.4.6' \"$PLUGIN_DIR/plugin.yaml\"" in text
     assert 'test ! -e "$PLUGIN_DIR/credential-guard"' in text
 
 

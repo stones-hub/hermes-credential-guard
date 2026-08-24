@@ -1,12 +1,12 @@
-"""R11 / 0.4.5 release contract (source candidate; no build / no dist write).
+"""R12 / 0.4.6 release contract (source candidate; no build / no dist write).
 
 Strict pending-build phase:
-- four current version anchors are 0.4.5;
+- four current version anchors are 0.4.6;
 - standard four filenames bind PLUGIN_VERSION;
 - retained twelve historical artifacts (0.4.2/0.4.3/0.4.4) hash-freeze;
 - CURRENT_DIST_PHASE is source_candidate_pending_build;
-- R11 final-ZIP runner points at 0.4.5 and reuses shared install helpers
-  (never silent-skip / never fake-green on missing 0.4.5 ZIP).
+- R12 final-ZIP runner points at 0.4.6 and reuses shared install helpers
+  (never silent-skip / never fake-green on missing 0.4.6 ZIP).
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ from tests.test_current_dist_policy import CURRENT_DIST_PHASE, STRICT
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 
-# Frozen identity of the twelve historical dist members at 0.4.5 source-candidate
-# cutover (matches /tmp/cg_045_dist_before.json). Must not drift.
+# Frozen identity of the twelve historical dist members at 0.4.6 source-candidate
+# cutover (matches /tmp/cg_046_dist_before.json). Must not drift.
 _HISTORICAL_12 = (
     (
         "artifact-manifest-0.4.2.json",
@@ -108,24 +108,24 @@ def _load_builder_version() -> str:
     return mod.PLUGIN_VERSION
 
 
-def test_r11_045_four_current_version_anchors():
-    assert PLUGIN_VERSION == "0.4.5"
+def test_r12_046_four_current_version_anchors():
+    assert PLUGIN_VERSION == "0.4.6"
     plugin_yaml = (ROOT / "plugin.yaml").read_text(encoding="utf-8")
-    assert re.search(r"(?m)^version:\s*0\.4\.5\s*$", plugin_yaml)
+    assert re.search(r"(?m)^version:\s*0\.4\.6\s*$", plugin_yaml)
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "0.4.5"' in pyproject
-    assert _load_builder_version() == "0.4.5"
+    assert 'version = "0.4.6"' in pyproject
+    assert _load_builder_version() == "0.4.6"
 
 
-def test_r11_045_standard_four_filenames_bind_version():
-    assert ARTIFACT_MANIFEST_FILENAME == "artifact-manifest-0.4.5.json"
-    assert PLUGIN_ZIP_FILENAME == "credential-guard-0.4.5-hermes-plugin.zip"
-    assert WHEEL_FILENAME == "hermes_credential_guard-0.4.5-py3-none-any.whl"
-    assert SDIST_FILENAME == "hermes_credential_guard-0.4.5.tar.gz"
+def test_r12_046_standard_four_filenames_bind_version():
+    assert ARTIFACT_MANIFEST_FILENAME == "artifact-manifest-0.4.6.json"
+    assert PLUGIN_ZIP_FILENAME == "credential-guard-0.4.6-hermes-plugin.zip"
+    assert WHEEL_FILENAME == "hermes_credential_guard-0.4.6-py3-none-any.whl"
+    assert SDIST_FILENAME == "hermes_credential_guard-0.4.6.tar.gz"
 
 
-def test_r11_045_retired_artifacts_are_absent_and_current_set_is_exact():
-    """R11 / 0.4.5: superseded artifacts are retired from the tree.
+def test_r12_046_retired_artifacts_are_absent_and_current_set_is_exact():
+    """R12 / 0.4.6: superseded artifacts are retired from the tree.
 
     The previous contract froze twelve historical artifacts here so a rebuild
     could not silently rewrite shipped bytes. That protection now lives at the
@@ -153,8 +153,8 @@ def test_r11_045_retired_artifacts_are_absent_and_current_set_is_exact():
         assert not (DIST / name).exists(), f"retired artifact present: {name}"
 
 
-def test_r11_045_landed_phase_binds_current_artifacts_to_manifest():
-    """After the dual build, the 0.4.5 four-file set must be real and bound.
+def test_r12_046_landed_phase_binds_current_artifacts_to_manifest():
+    """After the dual build, the 0.4.6 four-file set must be real and bound.
 
     Mirror image of the pending-phase contract below: pending forbids the
     artifacts, landed requires them AND requires every hash to agree with the
@@ -166,20 +166,20 @@ def test_r11_045_landed_phase_binds_current_artifacts_to_manifest():
     manifest_path = DIST / ARTIFACT_MANIFEST_FILENAME
     assert manifest_path.is_file()
     man = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert man["version"] == "0.4.5"
+    assert man["version"] == "0.4.6"
     for kind, filename in (
         ("wheel", WHEEL_FILENAME),
         ("sdist", SDIST_FILENAME),
         ("plugin_zip", PLUGIN_ZIP_FILENAME),
     ):
         path = DIST / filename
-        assert path.is_file(), f"landed 0.4.5 {kind} missing: {filename}"
+        assert path.is_file(), f"landed 0.4.6 {kind} missing: {filename}"
         assert man[kind]["filename"] == filename
         assert _sha256(path) == man[kind]["sha256"], f"{kind} hash ≠ manifest"
         assert man[kind]["size"] == path.stat().st_size, f"{kind} size ≠ disk"
 
 
-def test_r11_045_current_phase_is_source_candidate_pending_build():
+def test_r12_046_current_phase_is_source_candidate_pending_build():
     assert STRICT is True
     assert CURRENT_DIST_PHASE in {
         "source_candidate_pending_build",
@@ -193,46 +193,46 @@ def test_r11_045_current_phase_is_source_candidate_pending_build():
     assert not (DIST / SDIST_FILENAME).exists()
 
 
-def test_r11_045_runner_points_at_045_reuses_shared_zip_helper():
+def test_r12_046_runner_points_at_046_reuses_shared_zip_helper():
     """Runner/harness wiring contract, phase-aware in BOTH directions.
 
     The stage flag is not free to drift: the harness' ``ARTIFACTS_LANDED`` must
     agree with ``CURRENT_DIST_PHASE`` in this module, and each phase carries a
     positive obligation —
 
-    * pending — resolve MUST hard-fail with ``R11_045_ARTIFACTS_PENDING_BUILD``;
+    * pending — resolve MUST hard-fail with ``R12_046_ARTIFACTS_PENDING_BUILD``;
     * landed  — resolve MUST return the real ZIP whose hash equals the on-disk
       artifact and the versioned manifest, and a wrong expected hash MUST raise.
 
     Neither branch may skip, xfail, or accept a historical 0.4.4 ZIP.
     """
-    harness_path = ROOT / "scripts" / "run_r11_045_final_zip_e2e.py"
-    runner_path = ROOT / "scripts" / "run_r11_045_final_zip_tests.py"
-    e2e_path = ROOT / "tests" / "r11_045_final_zip_e2e.py"
+    harness_path = ROOT / "scripts" / "run_r12_046_final_zip_e2e.py"
+    runner_path = ROOT / "scripts" / "run_r12_046_final_zip_tests.py"
+    e2e_path = ROOT / "tests" / "r12_046_final_zip_e2e.py"
     assert harness_path.is_file()
     assert runner_path.is_file()
     assert e2e_path.is_file()
     assert not e2e_path.name.startswith("test_")
 
     harness_text = harness_path.read_text(encoding="utf-8")
-    assert 'PLUGIN_VERSION = "0.4.5"' in harness_text
+    assert 'PLUGIN_VERSION = "0.4.6"' in harness_text
     assert 'f"credential-guard-{PLUGIN_VERSION}-hermes-plugin.zip"' in harness_text
-    assert "PENDING_R11_045_DUAL_BUILD_BACKFILL" in harness_text
+    assert "PENDING_R12_046_DUAL_BUILD_BACKFILL" in harness_text
     assert "STRICT = True" in harness_text
-    assert "R11_045_ARTIFACTS_PENDING_BUILD" in harness_text
+    assert "R12_046_ARTIFACTS_PENDING_BUILD" in harness_text
     assert "installed_zip_plugin" in harness_text
     assert "build_all" in harness_text or "Never calls" in harness_text
 
     runner = runner_path.read_text(encoding="utf-8")
     assert "CG_R6_BUILD_AUTHORIZED" in runner
     assert 'env.pop("CG_R6_BUILD_AUTHORIZED", None)' in runner
-    assert "tests/r11_045_final_zip_e2e.py" in runner
+    assert "tests/r12_046_final_zip_e2e.py" in runner
 
-    spec = importlib.util.spec_from_file_location("r11_045_optin_harness", harness_path)
+    spec = importlib.util.spec_from_file_location("r12_046_optin_harness", harness_path)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert mod.PLUGIN_VERSION == "0.4.5"
+    assert mod.PLUGIN_VERSION == "0.4.6"
     assert mod.STRICT is True
 
     pending = CURRENT_DIST_PHASE == "source_candidate_pending_build"
@@ -245,7 +245,7 @@ def test_r11_045_runner_points_at_045_reuses_shared_zip_helper():
         try:
             mod.resolve_plugin_zip()
         except FileNotFoundError as exc:
-            assert "R11_045_ARTIFACTS_PENDING_BUILD" in str(exc)
+            assert "R12_046_ARTIFACTS_PENDING_BUILD" in str(exc)
         else:
             raise AssertionError("pending resolve must hard-fail under strict=True")
         return
@@ -271,26 +271,26 @@ def test_r11_045_runner_points_at_045_reuses_shared_zip_helper():
         raise AssertionError("landed resolve must reject a mismatched hash")
 
 
-def test_r11_045_readme_declares_current_phase_truthfully():
+def test_r12_046_readme_declares_current_phase_truthfully():
     """README must match the real phase, and never invent an unbuilt hash.
 
     * pending — declares 源码候选 / 尚未落地 and carries NO parsable 64-hex for
-      the 0.4.5 plugin ZIP.
-    * landed  — must state the artifacts are built AND publish the 0.4.5 plugin
+      the 0.4.6 plugin ZIP.
+    * landed  — must state the artifacts are built AND publish the 0.4.6 plugin
       ZIP's real hash, which has to equal the on-disk artifact and the manifest.
 
     In BOTH phases the install recipe must stay pinned to a publicly released,
     verifiable ZIP with its real hash — a user following the README must never
-    be pointed at a download that does not exist. Before v0.4.5 was published
-    that meant staying on 0.4.4; now that v0.4.5 is tagged and released, the
-    recipe points at 0.4.5 and the hash must equal the on-disk artifact.
+    be pointed at a download that does not exist. Before v0.4.6 was published
+    that meant staying on 0.4.4; now that v0.4.6 is tagged and released, the
+    recipe points at 0.4.6 and the hash must equal the on-disk artifact.
     """
     text = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "当前版本：`0.4.5`" in text
+    assert "当前版本：`0.4.6`" in text
     assert "EXPECTED_SHA256=" in text
     # Install recipe points at the current, publicly released ZIP.
-    assert "credential-guard-0.4.5-hermes-plugin.zip" in text
-    assert "releases/download/v0.4.5/" in text
+    assert "credential-guard-0.4.6-hermes-plugin.zip" in text
+    assert "releases/download/v0.4.6/" in text
     # Superseded install targets must not linger in the recipe.
     assert "credential-guard-0.4.4-hermes-plugin.zip" not in text
     assert "d6ee2bf6a92a4ca55ee37f24802cf26316ab38adcbe27b9d59a4ee9e944ae265" not in text
@@ -299,7 +299,7 @@ def test_r11_045_readme_declares_current_phase_truthfully():
     assert f'EXPECTED_SHA256="{on_disk}"' in text
 
     zip_hash_re = re.compile(
-        r"credential-guard-0\.4\.5-hermes-plugin\.zip[`\s|]*`?([0-9a-f]{64})`?"
+        r"credential-guard-0\.4\.6-hermes-plugin\.zip[`\s|]*`?([0-9a-f]{64})`?"
     )
     if CURRENT_DIST_PHASE == "source_candidate_pending_build":
         assert "源码候选" in text
@@ -310,34 +310,34 @@ def test_r11_045_readme_declares_current_phase_truthfully():
     assert "源码候选" not in text, "landed README still claims 源码候选"
     assert "尚未落地" not in text, "landed README still claims 尚未落地"
     match = zip_hash_re.search(text)
-    assert match is not None, "landed README must publish the real 0.4.5 ZIP hash"
+    assert match is not None, "landed README must publish the real 0.4.6 ZIP hash"
     reported = match.group(1)
     zip_path = DIST / PLUGIN_ZIP_FILENAME
     assert zip_path.is_file()
     assert reported == _sha256(zip_path), "README hash ≠ on-disk plugin ZIP"
     man = json.loads((DIST / ARTIFACT_MANIFEST_FILENAME).read_text(encoding="utf-8"))
     assert reported == man["plugin_zip"]["sha256"], "README hash ≠ manifest"
-    # v0.4.5 is published, so the download URL must exist and be verifiable.
-    assert "releases/download/v0.4.5/" in text
+    # v0.4.6 is published, so the download URL must exist and be verifiable.
+    assert "releases/download/v0.4.6/" in text
 
 
-def test_r11_045_designated_report_matches_phase():
+def test_r12_046_designated_report_matches_phase():
     """The designated report must tell the truth about the current phase.
 
     Two mutually exclusive contracts, so neither phase can fake the other:
 
     * pending  — the report declares 源码候选 / 待主代理构建 and must NOT contain
-      a parsable ``64-hex`` cell for the 0.4.5 plugin ZIP (no invented hashes).
+      a parsable ``64-hex`` cell for the 0.4.6 plugin ZIP (no invented hashes).
     * landed   — the report must carry the plugin ZIP's REAL hash, and that
       hash must equal both the on-disk artifact and the versioned manifest.
       A stale "pending" wording is rejected outright, so flipping the phase
       flag without backfilling the report cannot pass.
     """
-    report = ROOT / "docs" / "R11-0.4.5-验收报告.md"
+    report = ROOT / "docs" / "R12-0.4.6-验收报告.md"
     assert report.is_file()
     text = report.read_text(encoding="utf-8")
     pat = re.compile(
-        r"`credential-guard-0\.4\.5-hermes-plugin\.zip`\s*\|\s*`([0-9a-f]{64})`"
+        r"`credential-guard-0\.4\.6-hermes-plugin\.zip`\s*\|\s*`([0-9a-f]{64})`"
     )
     if CURRENT_DIST_PHASE == "source_candidate_pending_build":
         assert "源码候选" in text
@@ -350,7 +350,7 @@ def test_r11_045_designated_report_matches_phase():
     )
     match = pat.search(text)
     assert match is not None, (
-        "landed phase report must bind the real 0.4.5 plugin ZIP hash"
+        "landed phase report must bind the real 0.4.6 plugin ZIP hash"
     )
     reported = match.group(1)
     zip_path = DIST / PLUGIN_ZIP_FILENAME

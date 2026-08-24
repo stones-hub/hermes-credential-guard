@@ -42,7 +42,7 @@ _REDACTION_MARKER_RE = re.compile(r"<SECRET:cg_[0-9a-f]{16}>")
 #: so that claim is backed by a run that can actually happen.
 EXPECTED_PLUGIN_ZIP = "credential-guard-0.4.5-hermes-plugin.zip"
 EXPECTED_PLUGIN_ZIP_SHA256 = (
-    "a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3"
+    "399d9c8712d2e567fc2f0708d4bcd9bdc16c81b466a06f203a7ec30c7919b34c"
 )
 
 #: 4a scenarios (subset).

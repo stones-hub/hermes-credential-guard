@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""R11 0.4.5 final plugin-ZIP isolated E2E harness (opt-in).
+"""R12 0.4.6 final plugin-ZIP isolated E2E harness (opt-in).
 
-Installs the landed 0.4.5 plugin ZIP into a temporary Hermes home and proves:
+Installs the landed 0.4.6 plugin ZIP into a temporary Hermes home and proves:
 1. real PluginManager discovers/loads from the install tree (not repo source);
 2. key module bytes match the ZIP member;
 3. long-session continuity cases (large request / collision / unresolved /
    protocol-field / residual / scanner / final gate);
 4. protocol-field registered-secret fail-closed (0.4.4 narrow, retained);
 5. fake Provider sees zero synthetic secrets; blocked cases Provider=0;
-6. 0.4.5 R11 out-of-box behaviour from the INSTALL TREE:
+6. 0.4.6 R12 out-of-box behaviour from the INSTALL TREE:
    C1 zero-config chat passes through; C1 broken-store stays fail-closed;
    C6 redacted credential-code misuse returns the fixed refusal code;
    C10 offline ``validate`` accepts a good config and rejects a bad one;
@@ -20,7 +20,7 @@ Landed phase: ``ARTIFACTS_LANDED=True`` with ``STRICT=True`` after the real
 dual build wrote the four-file set into ``dist/``. Resolve binds the landed ZIP
 hash (never silent skip / fake green). The pending-build hard-fail path is
 retained for historical contract documentation; its sentinel constant
-``PENDING_R11_045_DUAL_BUILD_BACKFILL`` is no longer the expected hash.
+``PENDING_R12_046_DUAL_BUILD_BACKFILL`` is no longer the expected hash.
 
 Never touches real default/worker profiles, real credentials, ~/.ssh, or
 non-loopback peers. Never calls ``build_all``. Never modifies Hermes source.
@@ -44,20 +44,20 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-PLUGIN_VERSION = "0.4.5"
+PLUGIN_VERSION = "0.4.6"
 EXPECTED_PLUGIN_ZIP = f"credential-guard-{PLUGIN_VERSION}-hermes-plugin.zip"
 # Strict stage flag: True after the real dual build landed the four-file set.
 ARTIFACTS_LANDED = True
 STRICT = True
 # Historical pending sentinel (kept for contract documentation only).
-PENDING_SENTINEL = "PENDING_R11_045_DUAL_BUILD_BACKFILL"
+PENDING_SENTINEL = "PENDING_R12_046_DUAL_BUILD_BACKFILL"
 # Backfilled from the landed build; must match dist/ + versioned manifest.
 EXPECTED_PLUGIN_ZIP_SHA256 = (
-    "a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3"
+    "399d9c8712d2e567fc2f0708d4bcd9bdc16c81b466a06f203a7ec30c7919b34c"
 )
 
 OPENSSH_KEY = """-----BEGIN OPENSSH PRIVATE KEY-----
-CG_SYNTHETIC_NOT_A_REAL_KEY_R11_045_ONLY
+CG_SYNTHETIC_NOT_A_REAL_KEY_R12_046_ONLY
 -----END OPENSSH PRIVATE KEY-----
 """
 
@@ -84,7 +84,7 @@ def resolve_plugin_zip(
 ) -> Path:
     if STRICT and not ARTIFACTS_LANDED:
         raise FileNotFoundError(
-            "R11_045_ARTIFACTS_PENDING_BUILD: "
+            "R12_046_ARTIFACTS_PENDING_BUILD: "
             f"{expected_name} not landed; main-agent dual-build required "
             "(strict=True; not a skip)"
         )
@@ -406,7 +406,7 @@ def _provider_probe(mw, request: dict) -> Dict[str, Any]:
 
 
 def _r11_probe_script() -> str:
-    """Install-tree subprocess body for the 0.4.5 out-of-box (C1/C6/C10) checks.
+    """Install-tree subprocess body for the 0.4.6 out-of-box (C1/C6/C10) checks.
 
     Runs in a fresh interpreter with ONLY the install tree on ``sys.path`` and a
     temporary ``HERMES_HOME``, so what is measured is the packaged plugin, not
@@ -515,7 +515,7 @@ print(json.dumps(out))
 def _run_r11_probe(
     plugin_dest: Path, hermes_home: Path, iso_home: Path, mode: str
 ) -> Dict[str, Any]:
-    """Run one 0.4.5 out-of-box probe inside the install tree."""
+    """Run one 0.4.6 out-of-box probe inside the install tree."""
     proc = subprocess.run(
         [
             sys.executable,
@@ -542,23 +542,23 @@ def _run_r11_probe(
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"R11 probe [{mode}] failed: code={proc.returncode} "
+            f"R12 probe [{mode}] failed: code={proc.returncode} "
             f"stderr={proc.stderr[-2000:]}"
         )
     lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
     if not lines:
-        raise RuntimeError(f"R11 probe [{mode}] produced no JSON")
+        raise RuntimeError(f"R12 probe [{mode}] produced no JSON")
     return json.loads(lines[-1])
 
 
 def run_r11_out_of_box_from_install_tree(plugin_zip: Path) -> Dict[str, Any]:
-    """0.4.5 open-the-box proofs, all executed from the installed ZIP tree."""
+    """0.4.6 open-the-box proofs, all executed from the installed ZIP tree."""
     if STRICT and not ARTIFACTS_LANDED:
         raise FileNotFoundError(
-            "R11_045_ARTIFACTS_PENDING_BUILD: out-of-box E2E requires landed "
+            "R12_046_ARTIFACTS_PENDING_BUILD: out-of-box E2E requires landed "
             f"{PLUGIN_VERSION} plugin ZIP (strict=True; not a skip)"
         )
-    with tempfile.TemporaryDirectory(prefix="cg-r11-045-oob-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="cg-r11-046-oob-") as tmp:
         tmp_path = Path(tmp)
         iso_home = tmp_path / "home"
         iso_home.mkdir()
@@ -607,12 +607,12 @@ def run_r11_out_of_box_from_install_tree(plugin_zip: Path) -> Dict[str, Any]:
 def run_isolated_continuity_e2e(plugin_zip: Path) -> Dict[str, Any]:
     if STRICT and not ARTIFACTS_LANDED:
         raise FileNotFoundError(
-            "R11_045_ARTIFACTS_PENDING_BUILD: continuity E2E requires landed "
+            "R12_046_ARTIFACTS_PENDING_BUILD: continuity E2E requires landed "
             f"{PLUGIN_VERSION} plugin ZIP (strict=True; not a skip)"
         )
     decoy = "CG_SYNTHETIC_DECOY_" + secrets.token_hex(16)
     encoded = _encoded_openssh_key()
-    with tempfile.TemporaryDirectory(prefix="cg-r11-045-zip-e2e-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="cg-r11-046-zip-e2e-") as tmp:
         tmp_path = Path(tmp)
         old_cwd = Path.cwd()
         os.chdir(tmp_path)
@@ -843,7 +843,7 @@ def prove_source_fallback_mutation_red(plugin_zip: Path) -> Dict[str, Any]:
     """Damage the temp install copy; prove PluginManager does not fall back."""
     if STRICT and not ARTIFACTS_LANDED:
         raise FileNotFoundError(
-            "R11_045_ARTIFACTS_PENDING_BUILD: source-fallback mutation requires "
+            "R12_046_ARTIFACTS_PENDING_BUILD: source-fallback mutation requires "
             f"landed {PLUGIN_VERSION} plugin ZIP (strict=True; not a skip)"
         )
     import shutil
@@ -852,7 +852,7 @@ def prove_source_fallback_mutation_red(plugin_zip: Path) -> Dict[str, Any]:
     if not source_middleware.is_file():
         raise AssertionError("repo source temptation missing: middleware.py")
 
-    with tempfile.TemporaryDirectory(prefix="cg-r11-045-src-mut-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="cg-r11-046-src-mut-") as tmp:
         tmp_path = Path(tmp)
         extract_root = tmp_path / "zip-extract"
         iso_home = tmp_path / "home"
@@ -972,7 +972,7 @@ def prove_source_fallback_mutation_red(plugin_zip: Path) -> Dict[str, Any]:
         }
 
 
-def evaluate_r11_045_final_zip_gates(summary: dict) -> int:
+def evaluate_r12_046_final_zip_gates(summary: dict) -> int:
     if summary.get("plugin_version") != PLUGIN_VERSION:
         return 10
     if summary.get("installed_from_zip") is not True:
@@ -1005,7 +1005,7 @@ def evaluate_r11_045_final_zip_gates(summary: dict) -> int:
 
 
 def evaluate_r11_out_of_box_gates(oob: dict) -> int:
-    """R11 0.4.5 open-the-box gates (C1 / C6 / C10) from the install tree."""
+    """R12 0.4.6 open-the-box gates (C1 / C6 / C10) from the install tree."""
     if oob.get("probes_ran_from_install_tree") is not True:
         return 20
     # C1: fresh user with no store must chat normally.
@@ -1065,16 +1065,16 @@ def main() -> int:
         "factor_control_detected": fc.get("detected_source_fallback"),
     }
     print(json.dumps(summary, sort_keys=True))
-    code = evaluate_r11_045_final_zip_gates(summary)
+    code = evaluate_r12_046_final_zip_gates(summary)
     if code != 0:
-        print(f"R11_045_FINAL_ZIP_GATE_FAIL code={code}", file=sys.stderr)
+        print(f"R12_046_FINAL_ZIP_GATE_FAIL code={code}", file=sys.stderr)
         return code
     oob_code = evaluate_r11_out_of_box_gates(oob)
     if oob_code != 0:
-        print(f"R11_045_OUT_OF_BOX_GATE_FAIL code={oob_code}", file=sys.stderr)
+        print(f"R12_046_OUT_OF_BOX_GATE_FAIL code={oob_code}", file=sys.stderr)
         return oob_code
     if not summary.get("source_fallback_mutation_red"):
-        print("R11_045_SOURCE_FALLBACK_MUTATION_NOT_RED", file=sys.stderr)
+        print("R12_046_SOURCE_FALLBACK_MUTATION_NOT_RED", file=sys.stderr)
         return 13
     return 0
 

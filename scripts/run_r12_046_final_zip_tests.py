@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""R11 0.4.5 final-ZIP E2E opt-in pytest runner.
+"""R12 0.4.6 final-ZIP E2E opt-in pytest runner.
 
-Runs exactly ``tests/r11_045_final_zip_e2e.py`` (outside the no-build
+Runs exactly ``tests/r12_046_final_zip_e2e.py`` (outside the no-build
 ``tests/test_*.py`` glob). Never sets ``CG_R6_BUILD_AUTHORIZED``.
 
 While ``ARTIFACTS_LANDED=False`` (strict pending), resolve hard-fails with
-``R11_045_ARTIFACTS_PENDING_BUILD`` — never silent skip / fake green.
+``R12_046_ARTIFACTS_PENDING_BUILD`` — never silent skip / fake green.
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ from typing import Dict, List, Sequence, Tuple
 
 REPO = Path(__file__).resolve().parents[1]
 
-E2E_MODULES: Tuple[str, ...] = ("tests/r11_045_final_zip_e2e.py",)
+E2E_MODULES: Tuple[str, ...] = ("tests/r12_046_final_zip_e2e.py",)
 
 SAFE_DISPLAY_FLAGS = ("-q", "-v", "-x", "--collect-only")
 SAFE_TB_VALUES = ("short", "long", "line", "native", "no", "auto")
 
 
-class R11FinalZipRunnerArgError(ValueError):
+class R12FinalZipRunnerArgError(ValueError):
     """Raised when argv asks for anything other than the fixed module."""
 
 
@@ -36,15 +36,15 @@ def _validate_extra(extra: Sequence[str]) -> List[str]:
             continue
         if arg.startswith("--tb="):
             if arg.split("=", 1)[1] not in SAFE_TB_VALUES:
-                raise R11FinalZipRunnerArgError(f"unsupported --tb value: {arg}")
+                raise R12FinalZipRunnerArgError(f"unsupported --tb value: {arg}")
             out.append(arg)
             continue
         if arg.startswith("--maxfail="):
             if not arg.split("=", 1)[1].isdigit():
-                raise R11FinalZipRunnerArgError(f"unsupported --maxfail value: {arg}")
+                raise R12FinalZipRunnerArgError(f"unsupported --maxfail value: {arg}")
             out.append(arg)
             continue
-        raise R11FinalZipRunnerArgError(
+        raise R12FinalZipRunnerArgError(
             f"selection is owned by this runner; refused argument: {arg}"
         )
     return out
@@ -76,14 +76,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         for rel in E2E_MODULES:
             if not (REPO / rel).is_file():
-                raise R11FinalZipRunnerArgError(f"E2E module missing: {rel}")
+                raise R12FinalZipRunnerArgError(f"E2E module missing: {rel}")
         py_argv = build_pytest_argv(extra)
-    except (R11FinalZipRunnerArgError, OSError) as exc:
-        print(f"R11_045_FINAL_ZIP_RUNNER_REJECT {exc}", file=sys.stderr)
+    except (R12FinalZipRunnerArgError, OSError) as exc:
+        print(f"R12_046_FINAL_ZIP_RUNNER_REJECT {exc}", file=sys.stderr)
         return 2
     env = build_env()
     print(
-        "R11_045_FINAL_ZIP_RUNNER opt-in E2E: "
+        "R12_046_FINAL_ZIP_RUNNER opt-in E2E: "
         + " ".join([sys.executable, "-m", "pytest", *py_argv])
     )
     proc = subprocess.run(

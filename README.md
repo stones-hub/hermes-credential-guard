@@ -2,7 +2,7 @@
 
 Credential Guard 是一个独立的 Hermes 插件，用于保护本机凭证，并在用户人工批准后让 Hermes 使用凭证执行受限操作，而不把真实凭证交给模型。
 
-当前版本：`0.4.5`（已 Tag `v0.4.5` 并发布 GitHub Release；四制品由真实双构建写入本仓库 `dist/`，哈希见下文「开发与验证」。）
+当前版本：`0.4.6`（已 Tag `v0.4.6` 并发布 GitHub Release；四制品由真实双构建写入本仓库 `dist/`，哈希见下文「开发与验证」。）
 
 ```text
 credentials = 要保护的秘密
@@ -145,7 +145,7 @@ host / path / program / 凭证值。
 - 已安装支持原生插件的 Hermes Agent；
 - macOS 或 Linux；
 - Python 3.9 及以上；
-- 当前 `0.4.5` 无第三方 Python 运行依赖。
+- 当前 `0.4.6` 无第三方 Python 运行依赖。
 
 > Credential Guard 是纯 Python 目录插件。正式插件 ZIP 解压后即可加载，用户不需要运行 `pip install`、`npm build`、`make` 或其他构建命令。
 
@@ -184,16 +184,16 @@ hermes -p "$PROFILE" plugins update credential-guard
 
 ## 方式二：本地 ZIP 安装
 
-本地安装必须使用正式制品。0.4.5 已 Tag 并发布 GitHub Release，插件 ZIP 同时存在于本仓库 `dist/`：
+本地安装必须使用正式制品。0.4.6 已 Tag 并发布 GitHub Release，插件 ZIP 同时存在于本仓库 `dist/`：
 
 ```text
-credential-guard-0.4.5-hermes-plugin.zip
+credential-guard-0.4.6-hermes-plugin.zip
 ```
 
 正式下载：
 
 ```text
-https://github.com/stones-hub/hermes-credential-guard/releases/download/v0.4.5/credential-guard-0.4.5-hermes-plugin.zip
+https://github.com/stones-hub/hermes-credential-guard/releases/download/v0.4.6/credential-guard-0.4.6-hermes-plugin.zip
 ```
 
 不要把 GitHub 自动生成的 `Source code.zip` 当作正式插件 ZIP。
@@ -204,12 +204,12 @@ https://github.com/stones-hub/hermes-credential-guard/releases/download/v0.4.5/c
 set -euo pipefail
 
 PROFILE="default"
-PLUGIN_ZIP="/path/to/credential-guard-0.4.5-hermes-plugin.zip"
-EXPECTED_SHA256="a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3"
+PLUGIN_ZIP="/path/to/credential-guard-0.4.6-hermes-plugin.zip"
+EXPECTED_SHA256="399d9c8712d2e567fc2f0708d4bcd9bdc16c81b466a06f203a7ec30c7919b34c"
 CONFIG_PATH="$(hermes -p "$PROFILE" config path)"
 PROFILE_ROOT="$(dirname "$CONFIG_PATH")"
 PLUGIN_DIR="$PROFILE_ROOT/plugins/credential-guard"
-STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/credential-guard-0.4.5.XXXXXX")"
+STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/credential-guard-0.4.6.XXXXXX")"
 ACTUAL_SHA256="$(shasum -a 256 "$PLUGIN_ZIP" | cut -d ' ' -f 1)"
 
 if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
@@ -232,7 +232,7 @@ set -euo pipefail
 unzip -q "$PLUGIN_ZIP" -d "$STAGE_DIR"
 test -f "$STAGE_DIR/credential-guard/plugin.yaml"
 test -f "$STAGE_DIR/credential-guard/__init__.py"
-grep -qx 'version: 0.4.5' "$STAGE_DIR/credential-guard/plugin.yaml"
+grep -qx 'version: 0.4.6' "$STAGE_DIR/credential-guard/plugin.yaml"
 test ! -e "$STAGE_DIR/credential-guard/credential-guard"
 printf '%s\n' "ZIP_STRUCTURE_OK"
 ```
@@ -240,7 +240,7 @@ printf '%s\n' "ZIP_STRUCTURE_OK"
 预期版本：
 
 ```text
-version: 0.4.5
+version: 0.4.6
 ```
 
 ZIP 应只有一层插件根目录：
@@ -264,7 +264,7 @@ mkdir -p "$PROFILE_ROOT/plugins"
 test ! -e "$PLUGIN_DIR"
 cp -R "$STAGE_DIR/credential-guard" "$PLUGIN_DIR"
 test -f "$PLUGIN_DIR/plugin.yaml"
-grep -qx 'version: 0.4.5' "$PLUGIN_DIR/plugin.yaml"
+grep -qx 'version: 0.4.6' "$PLUGIN_DIR/plugin.yaml"
 test ! -e "$PLUGIN_DIR/credential-guard"
 printf '%s\n' "PLUGIN_INSTALL_OK"
 ```
@@ -283,7 +283,7 @@ test -d "$BACKUP_DIR"
 test ! -e "$PLUGIN_DIR"
 cp -R "$STAGE_DIR/credential-guard" "$PLUGIN_DIR"
 test -f "$PLUGIN_DIR/plugin.yaml"
-grep -qx 'version: 0.4.5' "$PLUGIN_DIR/plugin.yaml"
+grep -qx 'version: 0.4.6' "$PLUGIN_DIR/plugin.yaml"
 test ! -e "$PLUGIN_DIR/credential-guard"
 printf '%s\n' "PLUGIN_UPGRADE_OK"
 ```
@@ -970,13 +970,13 @@ $PROFILE_ROOT/credential-guard/
 
 # 当前边界
 
-0.4.5 正式保护：
+0.4.6 正式保护：
 
 - Hermes 主聊天 conversation loop 的模型请求；
 - 主链工具结果；
 - 协议骨架字段（`model` / `role` / `name` / `tool_call_id`）命中已登记凭证变体时本机 fail-closed。
 
-0.4.5 不保证覆盖：
+0.4.6 不保证覆盖：
 
 - **未登记的凭证** —— 没有写进 `credentials` 的 Key / 密码 / Token 原样发送给模型，插件不做通用格式识别；
 - 自动标题；
@@ -1018,19 +1018,19 @@ Credential Guard 不能把恶意本地程序变安全。`process_env` 和 `stdin
 CG_R6_BUILD_AUTHORIZED=1 .venv/bin/python scripts/build_release_artifacts.py
 ```
 
-当前活动 `dist/` 只含当前版本的 4 件 0.4.5 制品。已被取代的 0.4.2 / 0.4.3 / 0.4.4 制品不再随仓库分发——每个已发布版本的正式 ZIP 都可从对应的 GitHub Release 下载，仓库内不再保留副本。
+当前活动 `dist/` 只含当前版本的 4 件 0.4.6 制品。已被取代的 0.4.2 / 0.4.3 / 0.4.4 / 0.4.5 制品不再随仓库分发——每个已发布版本的正式 ZIP 都可从对应的 GitHub Release 下载，仓库内不再保留副本。
 
-0.4.5 四制品（实测 SHA-256，与 `dist/artifact-manifest-0.4.5.json` 逐项一致）：
+0.4.6 四制品（实测 SHA-256，与 `dist/artifact-manifest-0.4.6.json` 逐项一致）：
 
 ```text
-dist/credential-guard-0.4.5-hermes-plugin.zip
-  a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3
-dist/hermes_credential_guard-0.4.5-py3-none-any.whl
-  9096c11062b8b74ad29874db74208af753ea73a99f6035449166d1ed3d8c7dff
-dist/hermes_credential_guard-0.4.5.tar.gz
-  e428dd89c6a6ae04242f6261ea9670995466757d0653bbd70e808a2e28713407
-dist/artifact-manifest-0.4.5.json
-  ac56634322fb474093904036d77702f696791b29e6a841e76661bb147bbf1ed6
+dist/credential-guard-0.4.6-hermes-plugin.zip
+  399d9c8712d2e567fc2f0708d4bcd9bdc16c81b466a06f203a7ec30c7919b34c
+dist/hermes_credential_guard-0.4.6-py3-none-any.whl
+  93a4fc1fa5899a43b28514e9a8c58bf7faabdf1c8a8a726f01a18a2c7298d0f4
+dist/hermes_credential_guard-0.4.6.tar.gz
+  d1ef7b88c94822d2f67962d09b6ce269795b45041f04545f22046a011658c384
+dist/artifact-manifest-0.4.6.json
+  622a4fcef23fe00c08cbe2e5634b62bf3e5f857622902d5da84095336f01730a
 ```
 
 两次完全独立的构建产出逐字节相同的 wheel / sdist / plugin zip / manifest（`source_date_epoch=1704067200`、`tz=UTC`、`pythonhashseed=0`、归一化归档）。

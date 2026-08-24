@@ -552,6 +552,7 @@ _DESIGNATED_REPORTS = {
     "0.4.3": "docs/R9-0.4.3-验收报告.md",
     "0.4.4": "docs/R10-0.4.4-验收报告.md",
     "0.4.5": "docs/R11-0.4.5-验收报告.md",
+    "0.4.6": "docs/R12-0.4.6-验收报告.md",
 }
 
 # Strict stage: False until main-agent dual-build lands 0.4.5 artifacts + hashes.

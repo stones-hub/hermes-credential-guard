@@ -88,7 +88,7 @@ def test_optin_runner_owns_selection_and_never_authorizes_build():
 
 def test_harness_pins_expected_zip_sha256():
     src = (ROOT / HARNESS_REL).read_text(encoding="utf-8")
-    assert "a2d44717edee766f861e3484bbe051e14377409ed274c595ff0786d3b7a9f0e3" in src
+    assert "399d9c8712d2e567fc2f0708d4bcd9bdc16c81b466a06f203a7ec30c7919b34c" in src
     assert "credential-guard-0.4.5-hermes-plugin.zip" in src
     tree = ast.parse(src)
     assert isinstance(tree, ast.Module)

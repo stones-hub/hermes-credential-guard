@@ -56,7 +56,7 @@ def _current_landed_paths():
 
 
 def test_landed_current_artifacts_exist_and_match_versioned_manifest():
-    assert PLUGIN_VERSION == "0.4.5"
+    assert PLUGIN_VERSION == "0.4.6"
     assert STRICT is True
     paths = _current_landed_paths()
     if CURRENT_DIST_PHASE == "source_candidate_pending_build":
@@ -102,13 +102,14 @@ def test_dist_has_exactly_the_current_release_files():
     """dist/ carries the current release only (R11 / 0.4.5 policy).
 
     Superseded 0.4.2 / 0.4.3 / 0.4.4 artifacts were retired from the tree on
-    2026-08-21 with user approval; each remains downloadable from its GitHub
-    Release. Retired names must not reappear here.
+    2026-08-21 with user approval; 0.4.5 joined them on 2026-08-24 for 0.4.6.
+    Each remains downloadable from its GitHub Release. Retired names must not
+    reappear here.
     """
     names = sorted(p.name for p in DIST.iterdir() if p.is_file())
     retired = {
         f"{stem}-{version}{suffix}"
-        for version in ("0.4.2", "0.4.3", "0.4.4")
+        for version in ("0.4.2", "0.4.3", "0.4.4", "0.4.5")
         for stem, suffix in (
             ("artifact-manifest", ".json"),
             ("credential-guard", "-hermes-plugin.zip"),
@@ -119,7 +120,7 @@ def test_dist_has_exactly_the_current_release_files():
     assert sorted(set(names) & retired) == []
     if CURRENT_DIST_PHASE == "source_candidate_pending_build":
         assert names == []
-        assert WHEEL_FILENAME.endswith("-0.4.5-py3-none-any.whl")
+        assert WHEEL_FILENAME.endswith("-0.4.6-py3-none-any.whl")
         assert PLUGIN_ZIP_FILENAME not in names
         return
 
@@ -133,7 +134,7 @@ def test_dist_has_exactly_the_current_release_files():
     )
     assert names == expected
     assert len(expected) == 4
-    assert WHEEL_FILENAME.endswith("-0.4.5-py3-none-any.whl")
+    assert WHEEL_FILENAME.endswith("-0.4.6-py3-none-any.whl")
 
 
 def _plugin_zip_under_audit() -> Path:
